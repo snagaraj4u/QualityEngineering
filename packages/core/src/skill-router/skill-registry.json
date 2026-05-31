@@ -1,0 +1,26 @@
+{
+  "cucumber-bdd-ui": {
+    "framework": "cucumber",
+    "pattern": "bdd-ui",
+    "description": "Generate Gherkin scenarios for UI testing with BDD",
+    "template": "packages/core/src/skill-router/prompts/cucumber-bdd-ui.prompt"
+  },
+  "cucumber-api-bdd": {
+    "framework": "cucumber",
+    "pattern": "api",
+    "description": "Generate Gherkin scenarios for API testing with BDD",
+    "template": "packages/core/src/skill-router/prompts/cucumber-api-bdd.prompt"
+  },
+  "jest-unit": {
+    "framework": "jest",
+    "pattern": "unit",
+    "description": "Generate Jest unit tests",
+    "template": "packages/core/src/skill-router/prompts/jest-unit.prompt"
+  },
+  "cypress-e2e": {
+    "framework": "cypress",
+    "pattern": "e2e",
+    "description": "Generate Cypress end-to-end tests",
+    "template": "packages/core/src/skill-router/prompts/cypress-e2e.prompt"
+  }
+}

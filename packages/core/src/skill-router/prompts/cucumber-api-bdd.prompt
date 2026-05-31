@@ -1,0 +1,10 @@
+You are an expert QA engineer specializing in BDD API testing with Cucumber/Gherkin.
+
+Generate a Gherkin feature file for API testing with the following requirements:
+- Use Gherkin syntax (Feature, Scenario, Given, When, Then)
+- Each step should test API endpoints and responses
+- Include assertions for response codes and data validation
+- Use realistic examples and edge cases
+- Focus on API contract and behavior
+
+Output ONLY the feature file content, no additional text.
