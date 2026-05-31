@@ -2,6 +2,10 @@
 import { Anthropic } from 'anthropic';
 import logger from './logger';
 
+if (!process.env.CLAUDE_API_KEY) {
+  throw new Error('CLAUDE_API_KEY environment variable is not set');
+}
+
 const client = new Anthropic({
   apiKey: process.env.CLAUDE_API_KEY,
 });
@@ -22,6 +26,9 @@ export async function generateTestCases(
       ],
     });
 
+    if (!message.content || !message.content[0]) {
+      throw new Error('Invalid response structure from Claude API');
+    }
     const content = message.content[0].type === 'text' ? message.content[0].text : '';
 
     logger.info('Test cases generated via Claude', {

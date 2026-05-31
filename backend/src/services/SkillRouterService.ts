@@ -3,6 +3,8 @@ import { SkillRouter } from '@core/skill-router/SkillRouter';
 import { generateTestCases } from '../utils/claude';
 import { prisma } from '../utils/db';
 import logger from '../utils/logger';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export class SkillRouterService {
   private skillRouter: SkillRouter;
@@ -29,9 +31,14 @@ export class SkillRouterService {
       }
 
       // Get the prompt template
-      const promptTemplate = this.skillRouter.getPromptTemplate(skill.template);
-
-      if (!promptTemplate) {
+      let promptTemplate: string;
+      try {
+        const templatePath = path.resolve(skill.template);
+        if (!fs.existsSync(templatePath)) {
+          throw new Error(`Prompt template not found at: ${templatePath}`);
+        }
+        promptTemplate = fs.readFileSync(templatePath, 'utf-8');
+      } catch (error) {
         throw new Error(`Failed to load prompt template for skill: ${skill.template}`);
       }
 
@@ -77,7 +84,7 @@ export class SkillRouterService {
             outputTokens: 0,
             promptUsed: `${data.framework}-${data.designPattern}`,
             success: false,
-            error: (error as Error).message,
+            error: error instanceof Error ? error.message : String(error),
           },
         });
       }
