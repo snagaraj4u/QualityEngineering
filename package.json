@@ -1,0 +1,11 @@
+{
+  "name": "quality-engineering-monorepo",
+  "version": "0.1.0",
+  "description": "Multi-framework AI-powered Quality Engineering Platform",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "backend"
+  ]
+}

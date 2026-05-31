@@ -1,0 +1,19 @@
+{
+  "name": "@qe/core",
+  "version": "0.1.0",
+  "description": "Quality Engineering Platform - Core Library",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@qe/database": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
