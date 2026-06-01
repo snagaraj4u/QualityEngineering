@@ -1,11 +1,14 @@
 import { spawn } from 'child_process';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { logger } from './logger';
+import logger from './logger';
 
 // Validation function for test patterns to prevent shell injection
 function validateTestPattern(pattern: string): void {
   // Only allow alphanumeric, dots, slashes, hyphens, underscores, asterisks, question marks, and brackets
+  // Note: Inside character class [], {} doesn't need escaping but is included for clarity
+  // Pattern breakdown: letters/digits (a-z, A-Z, 0-9), underscore (_), hyphen (\-), dot (.),
+  // forward slash (/), curly braces ({}), asterisk (*), question mark (?), and brackets ([\])
   const allowedPatternRegex = /^[a-zA-Z0-9_\-./{}*?[\]]+$/;
   if (!allowedPatternRegex.test(pattern)) {
     throw new Error(
@@ -198,7 +201,8 @@ async function executeCucumber(
     child.on('close', async (code) => {
       try {
         // Validate exit code - non-zero means failure
-        if (code !== 0 && code !== null) {
+        // Note: Node.js close events never pass null for code
+        if (code !== 0) {
           throw new Error(`Cucumber execution failed with exit code ${code}`);
         }
 
@@ -264,7 +268,8 @@ async function executeJest(
     child.on('close', async (code) => {
       try {
         // Validate exit code - non-zero means failure
-        if (code !== 0 && code !== null) {
+        // Note: Node.js close events never pass null for code
+        if (code !== 0) {
           throw new Error(`Jest execution failed with exit code ${code}`);
         }
 
@@ -332,7 +337,8 @@ async function executeCypress(
     child.on('close', async (code) => {
       try {
         // Validate exit code - non-zero means failure
-        if (code !== 0 && code !== null) {
+        // Note: Node.js close events never pass null for code
+        if (code !== 0) {
           throw new Error(`Cypress execution failed with exit code ${code}`);
         }
 
@@ -398,7 +404,8 @@ async function executeSelenium(
     child.on('close', async (code) => {
       try {
         // Validate exit code - non-zero means failure
-        if (code !== 0 && code !== null) {
+        // Note: Node.js close events never pass null for code
+        if (code !== 0) {
           throw new Error(`Selenium execution failed with exit code ${code}`);
         }
 

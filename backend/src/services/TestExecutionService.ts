@@ -1,7 +1,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { prisma } from '../utils/db';
-import { logger } from '../utils/logger';
+import logger from '../utils/logger';
 import {
   executeTests,
   ExecutionOptions,
@@ -71,26 +71,34 @@ export class TestExecutionService {
     result: ExecutionResult
   ): Promise<void> {
     try {
-      await prisma.executionResult.create({
-        data: {
-          clientId,
-          projectId,
-          framework,
-          passed: result.passed,
-          failed: result.failed,
-          skipped: result.skipped,
-          status: result.failed > 0 ? 'FAILED' : 'PASSED',
-          duration: result.duration,
-          errorMessage: result.rawOutput,
-          testResults: JSON.stringify(result.tests),
-        },
-      });
+      // Only include rawOutput when there were test failures
+      const dataToSave: any = {
+        clientId,
+        projectId,
+        framework,
+        passed: result.passed,
+        failed: result.failed,
+        skipped: result.skipped,
+        status: result.failed > 0 ? 'FAILED' : 'PASSED',
+        duration: result.duration,
+        testResults: JSON.stringify(result.tests),
+      };
+
+      // Issue 2 fix: Only store rawOutput when there were actual failures
+      if (result.failed > 0 && result.rawOutput) {
+        dataToSave.testOutput = result.rawOutput;
+      }
+
+      await prisma.executionResult.create({ data: dataToSave });
       logger.info(`Execution results saved for client ${clientId}, project ${projectId}`);
     } catch (error) {
-      // Propagate the error so callers can detect save failure
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error(`Failed to save execution results: ${errorMessage}`);
-      throw new Error(`Failed to save execution results: ${errorMessage}`);
+      // Issue 5 fix: Log original error without duplicating context
+      if (error instanceof Error) {
+        logger.error(`Failed to save execution results: ${error.message}`);
+        throw error;
+      }
+      logger.error(`Failed to save execution results: ${String(error)}`);
+      throw new Error('Failed to save execution results');
     }
   }
 }
