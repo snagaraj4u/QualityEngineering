@@ -6,7 +6,20 @@
       "Bash(npx tsc *)",
       "Bash(node -e \"const ts = require\\('typescript'\\); const content = require\\('fs'\\).readFileSync\\('/c/QualityEngineering/backend/src/utils/executors.ts', 'utf8'\\); const result = ts.transpileModule\\(content, {compilerOptions: {module: ts.ModuleKind.ESNext}}\\); console.log\\(result.diagnostics.length === 0 ? 'Syntax OK' : result.diagnostics.map\\(d => d.messageText\\).join\\('; '\\)\\)\")",
       "Bash(cat)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(xargs grep *)",
+      "Bash(npx jest *)",
+      "Bash(ls *)",
+      "Bash(npx tsx *)",
+      "Bash(git add *)",
+      "Bash(git reset *)",
+      "Bash(git commit *)",
+      "Bash(npm run *)",
+      "Bash(grep -A 3 \"testRouter\\\\\\\\.post\\\\|testRouter\\\\\\\\.get\" /c/QualityEngineering/backend/src/routes/test.ts)",
+      "Bash(bash /tmp/key_validation.sh)",
+      "Bash(bash /tmp/verify_phase6_2.sh)",
+      "Bash(bash /tmp/check_new_issues.sh)",
+      "Bash(bash /tmp/integration_check.sh)"
     ]
   }
 }

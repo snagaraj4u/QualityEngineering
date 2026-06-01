@@ -134,6 +134,7 @@ enum ExecutionStatus {
   SKIPPED
   BLOCKED
   IN_PROGRESS
+  CANCELLED
 }
 
 // Defect model
