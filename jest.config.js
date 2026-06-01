@@ -2,7 +2,11 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>'],
-  testMatch: ['**/__tests__/**/*.ts', '**/?(*.)+(spec|test).ts'],
+  // Require a name segment before `.test`/`.spec` so source files that happen to
+  // be named `test.ts` (e.g. the routes/test.ts router) are not collected as suites.
+  testMatch: ['**/__tests__/**/*.ts', '**/*.(spec|test).ts'],
+  // Never collect from build output (gitignored `dist/` contains compiled .test.js).
+  testPathIgnorePatterns: ['/node_modules/', '/dist/'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   transform: {
     '^.+\\.tsx?$': 'ts-jest',
