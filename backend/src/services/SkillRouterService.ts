@@ -51,18 +51,25 @@ export class SkillRouterService {
       // Generate test cases via Claude
       const result = await generateTestCases(fullPrompt, data.requirements);
 
-      // Log the skill usage
-      await prisma.generationLog.create({
-        data: {
-          clientId: data.clientId,
-          framework: data.framework,
-          designPattern: data.designPattern,
-          inputTokens: result.inputTokens,
-          outputTokens: result.outputTokens,
-          promptUsed: skill.template,
-          success: true,
-        },
-      });
+      // Log the skill usage. Best-effort: telemetry must never fail (or mask)
+      // a successful generation, e.g. if the generation_logs table is absent.
+      try {
+        await prisma.generationLog.create({
+          data: {
+            clientId: data.clientId,
+            framework: data.framework,
+            designPattern: data.designPattern,
+            inputTokens: result.inputTokens,
+            outputTokens: result.outputTokens,
+            promptUsed: skill.template,
+            success: true,
+          },
+        });
+      } catch (logError) {
+        logger.warn('Failed to write generation log', {
+          error: logError instanceof Error ? logError.message : String(logError),
+        });
+      }
 
       return {
         content: result.content,
@@ -73,20 +80,26 @@ export class SkillRouterService {
     } catch (error) {
       logger.error('Failed to generate test case via skill router', error);
 
-      // Log the failure
+      // Log the failure (best-effort: must not mask the original error).
       if (data.clientId) {
-        await prisma.generationLog.create({
-          data: {
-            clientId: data.clientId,
-            framework: data.framework,
-            designPattern: data.designPattern,
-            inputTokens: 0,
-            outputTokens: 0,
-            promptUsed: `${data.framework}-${data.designPattern}`,
-            success: false,
-            error: error instanceof Error ? error.message : String(error),
-          },
-        });
+        try {
+          await prisma.generationLog.create({
+            data: {
+              clientId: data.clientId,
+              framework: data.framework,
+              designPattern: data.designPattern,
+              inputTokens: 0,
+              outputTokens: 0,
+              promptUsed: `${data.framework}-${data.designPattern}`,
+              success: false,
+              error: error instanceof Error ? error.message : String(error),
+            },
+          });
+        } catch (logError) {
+          logger.warn('Failed to write generation failure log', {
+            error: logError instanceof Error ? logError.message : String(logError),
+          });
+        }
       }
 
       throw error;
