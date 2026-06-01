@@ -1,0 +1,100 @@
+import { Anthropic } from 'anthropic';
+import * as fs from 'fs';
+import logger from './logger';
+
+if (!process.env.CLAUDE_API_KEY) {
+  throw new Error('CLAUDE_API_KEY environment variable is not set');
+}
+
+const client = new Anthropic({
+  apiKey: process.env.CLAUDE_API_KEY,
+});
+
+export interface VideoFrame {
+  timestamp: number;
+  description: string;
+}
+
+export interface VideoAnalysisResult {
+  frames: VideoFrame[];
+  summary: string;
+  suggestedSteps: string[];
+}
+
+/**
+ * Analyze video frames using Claude Vision API.
+ * Extracts key moments and generates test step descriptions.
+ */
+export async function analyzeVideoWithVision(
+  base64VideoChunk: string,
+  mimeType: 'video/mp4' | 'video/quicktime' | 'video/webm'
+): Promise<VideoAnalysisResult> {
+  try {
+    const message = await client.messages.create({
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 2048,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: mimeType,
+                data: base64VideoChunk,
+              },
+            },
+            {
+              type: 'text',
+              text: `Analyze this video/screenshot and extract test steps. For each distinct action visible:
+1. Describe what action the user is performing
+2. Identify what UI elements are being interacted with
+3. Describe the expected result or outcome
+
+Return JSON format:
+{
+  "steps": [
+    {"timestamp": 0, "action": "...", "element": "...", "expectedResult": "..."},
+    ...
+  ],
+  "summary": "...",
+  "framework_suggestions": ["cucumber", "cypress", "jest"]
+}`,
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!message.content || !message.content[0] || message.content[0].type !== 'text') {
+      throw new Error('Invalid response structure from Claude Vision API');
+    }
+
+    const content = message.content[0];
+    if (content.type !== 'text') {
+      throw new Error('Expected text response from Claude Vision API');
+    }
+
+    const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('Could not extract JSON from Claude response');
+    }
+
+    const analysisData = JSON.parse(jsonMatch[0]);
+
+    logger.info('Video analysis completed', {
+      stepsCount: analysisData.steps.length,
+      frameworks: analysisData.framework_suggestions,
+    });
+
+    return {
+      frames: analysisData.steps,
+      summary: analysisData.summary,
+      suggestedSteps: analysisData.framework_suggestions,
+    };
+  } catch (error) {
+    logger.error('Failed to analyze video with Claude Vision', error);
+    throw error;
+  }
+}
