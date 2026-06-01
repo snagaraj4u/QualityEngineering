@@ -24,10 +24,13 @@ export async function runCommand(options: {
     };
 
     const service = new TestExecutionService();
-    const result = await service.executeTests(request);
+    // executeTests is fire-and-forget: it persists a pending record, kicks off
+    // the run asynchronously, and returns the executionId. Results are reported
+    // via the API / SSE stream, not synchronously here.
+    const executionId = await service.executeTests(request);
 
     // Issue 7 fix: Sanitize stack traces and avoid exposing sensitive paths
-    logger.info(`Test execution completed: ${result.passed} passed, ${result.failed} failed`);
+    logger.info(`Test execution started: ${executionId}`);
 
     return;
   } catch (error) {

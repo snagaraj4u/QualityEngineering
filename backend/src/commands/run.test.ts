@@ -5,9 +5,15 @@ import logger from '../utils/logger';
 // Mock dependencies
 jest.mock('../services/TestExecutionService');
 jest.mock('../utils/logger', () => ({
+  // __esModule marks this as an ES module so ts-jest's interop helper reads
+  // `.default` directly instead of double-wrapping it (which left logger.error
+  // undefined → "logger.error is not a function").
+  __esModule: true,
   default: {
     error: jest.fn(),
     info: jest.fn(),
+    warn: jest.fn(),
+    debug: jest.fn(),
   },
 }));
 
@@ -78,7 +84,7 @@ describe('run.ts - Code Quality Issues', () => {
   describe('Issue 7: Stack trace exposure - sensitive paths in production', () => {
     it('should not output error.stack in production mode', async () => {
       const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'production';
+      (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
 
       const testError = new Error('Test failed at /home/user/secret/project/src/test.ts');
       const mockExecuteTests = jest
@@ -100,7 +106,7 @@ describe('run.ts - Code Quality Issues', () => {
         expect(errorMsg).toBe('Test execution failed');
       }
 
-      process.env.NODE_ENV = originalEnv;
+      (process.env as Record<string, string | undefined>).NODE_ENV = originalEnv;
     });
 
     it('should log only error message, not stack trace', async () => {
@@ -131,7 +137,7 @@ describe('run.ts - Code Quality Issues', () => {
 
     it('should expose stack trace only in development mode', async () => {
       const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'development';
+      (process.env as Record<string, string | undefined>).NODE_ENV = 'development';
 
       const testError = new Error('Development error with stack');
       const mockExecuteTests = jest
@@ -151,7 +157,7 @@ describe('run.ts - Code Quality Issues', () => {
         expect((error as Error).message).toBe('Development error with stack');
       }
 
-      process.env.NODE_ENV = originalEnv;
+      (process.env as Record<string, string | undefined>).NODE_ENV = originalEnv;
     });
 
     it('should not expose file paths in error messages', async () => {
@@ -165,7 +171,7 @@ describe('run.ts - Code Quality Issues', () => {
       (TestExecutionService.prototype as any).executeTests = mockExecuteTests;
 
       const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'production';
+      (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
 
       try {
         await runCommand({
@@ -181,7 +187,7 @@ describe('run.ts - Code Quality Issues', () => {
         expect(msg).not.toContain('secrets');
       }
 
-      process.env.NODE_ENV = originalEnv;
+      (process.env as Record<string, string | undefined>).NODE_ENV = originalEnv;
     });
   });
 
@@ -198,7 +204,7 @@ describe('run.ts - Code Quality Issues', () => {
       (TestExecutionService.prototype as any).executeTests = mockExecuteTests;
 
       const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'production';
+      (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
 
       await expect(
         runCommand({
@@ -214,7 +220,7 @@ describe('run.ts - Code Quality Issues', () => {
         })
       );
 
-      process.env.NODE_ENV = originalEnv;
+      (process.env as Record<string, string | undefined>).NODE_ENV = originalEnv;
     });
   });
 });
