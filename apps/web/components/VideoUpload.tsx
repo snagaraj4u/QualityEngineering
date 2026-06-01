@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Upload, AlertCircle, CheckCircle, X } from 'lucide-react';
 
 /**
@@ -45,12 +45,24 @@ export const VideoUpload: React.FC<VideoUploadProps> = ({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [framework, setFramework] = useState('Cucumber');
   const [designPattern, setDesignPattern] = useState('BDD');
+  const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const dragOverRef = useRef(false);
+  const xhrRef = useRef<XMLHttpRequest | null>(null);
 
   const VALID_EXTENSIONS = ['.mp4', '.mov', '.webm'];
   const VALID_MIMES = ['video/mp4', 'video/quicktime', 'video/webm'];
   const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
+
+  /**
+   * Cleanup effect: Abort XHR requests on component unmount
+   */
+  useEffect(() => {
+    return () => {
+      if (xhrRef.current) {
+        xhrRef.current.abort();
+      }
+    };
+  }, []);
 
   /**
    * Validate selected file
@@ -112,19 +124,19 @@ export const VideoUpload: React.FC<VideoUploadProps> = ({
   const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    dragOverRef.current = true;
+    if (!isUploading) setIsDragOver(true);
   };
 
   const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    dragOverRef.current = false;
+    setIsDragOver(false);
   };
 
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    dragOverRef.current = false;
+    setIsDragOver(false);
 
     const files = event.dataTransfer.files;
     if (files && files.length > 0) {
@@ -162,6 +174,7 @@ export const VideoUpload: React.FC<VideoUploadProps> = ({
       formData.append('designPattern', designPattern);
 
       const xhr = new XMLHttpRequest();
+      xhrRef.current = xhr;
 
       // Track upload progress
       xhr.upload.addEventListener('progress', (e) => {
@@ -176,10 +189,15 @@ export const VideoUpload: React.FC<VideoUploadProps> = ({
         if (xhr.status === 200) {
           try {
             const response = JSON.parse(xhr.responseText);
+
+            // Validate response structure
+            if (!response.analysisId || !response.steps || response.duration === undefined) {
+              throw new Error('Invalid response structure from API');
+            }
+
             setSuccessMessage('Video uploaded and analyzed successfully!');
             setUploadProgress(0);
             setSelectedFile(null);
-            setUploadProgress(0);
 
             // Call success callback
             onSuccess({
@@ -295,11 +313,19 @@ export const VideoUpload: React.FC<VideoUploadProps> = ({
 
       {/* Drag and Drop Area */}
       <div
+        role="button"
+        tabIndex={0}
+        aria-label="Drag and drop video file here or click to browse files"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            fileInputRef.current?.click();
+          }
+        }}
         className={`mb-6 border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-          dragOverRef.current
+          isDragOver
             ? 'border-blue-400 bg-blue-50'
             : 'border-gray-300 bg-gray-50 hover:border-gray-400'
         }`}
@@ -391,7 +417,7 @@ export const VideoUpload: React.FC<VideoUploadProps> = ({
       </div>
 
       {/* Progress Bar */}
-      {isUploading && uploadProgress > 0 && (
+      {isUploading && (
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-semibold text-gray-700">Upload Progress</span>

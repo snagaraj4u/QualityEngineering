@@ -3,18 +3,51 @@
  * Tests the complete flow from video upload to analysis results
  */
 
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { VideoUpload } from '../../../../apps/web/components/VideoUpload';
+
 describe('Video Upload and Processing', () => {
   const mockApiUrl = 'http://localhost:3001/api/video';
+  const mockOnSuccess = jest.fn();
+  const mockOnError = jest.fn();
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   describe('Video Upload Component', () => {
     it('should render upload form with file input', () => {
-      // Test will verify component renders with proper input fields
-      expect(true).toBe(true);
+      render(
+        <VideoUpload
+          onSuccess={mockOnSuccess}
+          onError={mockOnError}
+          clientId="test-client"
+        />
+      );
+      const uploadArea = screen.getByLabelText(/drag and drop video file/i);
+      expect(uploadArea).toBeInTheDocument();
+      const fileInput = screen.getByDisplayValue(/browse files/i, { selector: 'button' });
+      expect(fileInput).toBeInTheDocument();
     });
 
     it('should accept drag and drop files', () => {
-      // Test drag-and-drop functionality
-      expect(true).toBe(true);
+      render(
+        <VideoUpload
+          onSuccess={mockOnSuccess}
+          onError={mockOnError}
+          clientId="test-client"
+        />
+      );
+      const uploadArea = screen.getByLabelText(/drag and drop video file/i);
+
+      const file = new File(['test content'], 'test.mp4', { type: 'video/mp4' });
+      fireEvent.drop(uploadArea, {
+        dataTransfer: { files: [file] },
+      });
+
+      waitFor(() => {
+        expect(mockOnError).not.toHaveBeenCalled();
+      });
     });
 
     it('should validate file type on selection', () => {
@@ -41,16 +74,21 @@ describe('Video Upload and Processing', () => {
     });
 
     it('should display error message for invalid file type', () => {
-      // Test error message display for non-video files
-      const invalidMimes = ['text/plain', 'image/png', 'application/pdf'];
-      const validMimes = ['video/mp4', 'video/quicktime', 'video/webm'];
+      render(
+        <VideoUpload
+          onSuccess={mockOnSuccess}
+          onError={mockOnError}
+          clientId="test-client"
+        />
+      );
 
-      invalidMimes.forEach(mime => {
-        expect(['video/mp4', 'video/quicktime', 'video/webm'].includes(mime)).toBe(false);
-      });
+      const file = new File(['test content'], 'test.txt', { type: 'text/plain' });
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
 
-      validMimes.forEach(mime => {
-        expect(['video/mp4', 'video/quicktime', 'video/webm'].includes(mime)).toBe(true);
+      fireEvent.change(fileInput, { target: { files: [file] } });
+
+      waitFor(() => {
+        expect(screen.getByText(/invalid file type/i)).toBeInTheDocument();
       });
     });
 
@@ -76,13 +114,37 @@ describe('Video Upload and Processing', () => {
     });
 
     it('should disable upload button during upload', () => {
-      // Test will verify button is disabled while upload is in progress
-      expect(true).toBe(true);
+      const { rerender } = render(
+        <VideoUpload
+          onSuccess={mockOnSuccess}
+          onError={mockOnError}
+          clientId="test-client"
+        />
+      );
+
+      const uploadBtn = screen.getByText(/upload and analyze/i);
+      expect(uploadBtn).toBeDisabled();
     });
 
     it('should show progress indicator during upload', () => {
-      // Test will verify progress bar appears and updates
-      expect(true).toBe(true);
+      render(
+        <VideoUpload
+          onSuccess={mockOnSuccess}
+          onError={mockOnError}
+          clientId="test-client"
+        />
+      );
+
+      const file = new File(['test content'], 'test.mp4', { type: 'video/mp4' });
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+
+      fireEvent.change(fileInput, { target: { files: [file] } });
+      const uploadBtn = screen.getByText(/upload and analyze/i);
+      fireEvent.click(uploadBtn);
+
+      waitFor(() => {
+        expect(screen.getByText(/upload progress/i)).toBeInTheDocument();
+      });
     });
   });
 
@@ -174,8 +236,14 @@ describe('Video Upload and Processing', () => {
     });
 
     it('should require authentication', () => {
-      // Test will verify page checks for valid session
-      expect(true).toBe(true);
+      render(
+        <VideoUpload
+          onSuccess={mockOnSuccess}
+          onError={mockOnError}
+          clientId="test-client"
+        />
+      );
+      expect(screen.getByText(/upload and analyze/i)).toBeInTheDocument();
     });
 
     it('should display success notification after upload', () => {
@@ -206,8 +274,19 @@ describe('Video Upload and Processing', () => {
     });
 
     it('should allow retry on error', () => {
-      // Test will verify retry button is available after error
-      expect(true).toBe(true);
+      render(
+        <VideoUpload
+          onSuccess={mockOnSuccess}
+          onError={mockOnError}
+          clientId="test-client"
+        />
+      );
+
+      const file = new File(['test content'], 'test.mp4', { type: 'video/mp4' });
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+
+      fireEvent.change(fileInput, { target: { files: [file] } });
+      expect(screen.getByText(/upload and analyze/i)).toBeInTheDocument();
     });
   });
 

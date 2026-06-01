@@ -12,8 +12,11 @@ export default function VideoUploadPage() {
   const [analysisResult, setAnalysisResult] = useState<VideoAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Use a default clientId - in production, this would come from user session
-  const clientId = 'default-client';
+  // In production, extract from user session/auth
+  // For now using placeholder - integrate with NextAuth when available
+  // const session = useSession();
+  // const clientId = session?.data?.user?.id || 'unknown-user';
+  const clientId = 'default-client'; // TODO: Extract from user session
 
   const handleSuccess = (analysis: VideoAnalysisResult) => {
     setAnalysisResult(analysis);
