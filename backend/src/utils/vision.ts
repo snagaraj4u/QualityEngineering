@@ -12,7 +12,9 @@ const client = new Anthropic({
 
 export interface VideoFrame {
   timestamp: number;
-  description: string;
+  action: string;
+  element?: string;
+  expectedResult: string;
 }
 
 export interface VideoAnalysisResult {
@@ -30,8 +32,10 @@ export async function analyzeVideoWithVision(
   mimeType: 'video/mp4' | 'video/quicktime' | 'video/webm'
 ): Promise<VideoAnalysisResult> {
   try {
+    const model = process.env.CLAUDE_MODEL || 'claude-3-5-sonnet-20241022';
+
     const message = await client.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model,
       max_tokens: 2048,
       messages: [
         {
@@ -76,12 +80,38 @@ Return JSON format:
       throw new Error('Expected text response from Claude Vision API');
     }
 
-    const jsonMatch = content.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Could not extract JSON from Claude response');
-    }
+    // Parse JSON from the response with robust error handling
+    let analysisData: any;
+    try {
+      // Try to find a JSON object in the response
+      const startIdx = content.text.indexOf('{');
+      if (startIdx === -1) {
+        throw new Error('No JSON object found in Claude response');
+      }
 
-    const analysisData = JSON.parse(jsonMatch[0]);
+      // Extract the substring starting from the first '{'
+      const jsonStr = content.text.substring(startIdx);
+
+      // Try to parse from the end backwards to find valid JSON
+      let parsed: any = null;
+      for (let i = jsonStr.length - 1; i >= 1; i--) {
+        try {
+          parsed = JSON.parse(jsonStr.substring(0, i));
+          analysisData = parsed;
+          break;
+        } catch (e) {
+          // Continue trying previous positions
+        }
+      }
+
+      if (!analysisData) {
+        throw new Error('Could not parse JSON from Claude response');
+      }
+    } catch (parseError) {
+      throw new Error(
+        `Failed to parse Claude response: ${parseError instanceof Error ? parseError.message : String(parseError)}`
+      );
+    }
 
     logger.info('Video analysis completed', {
       stepsCount: analysisData.steps.length,
