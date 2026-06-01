@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm list *)",
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(node -e \"const ts = require\\('typescript'\\); const content = require\\('fs'\\).readFileSync\\('/c/QualityEngineering/backend/src/utils/executors.ts', 'utf8'\\); const result = ts.transpileModule\\(content, {compilerOptions: {module: ts.ModuleKind.ESNext}}\\); console.log\\(result.diagnostics.length === 0 ? 'Syntax OK' : result.diagnostics.map\\(d => d.messageText\\).join\\('; '\\)\\)\")",
+      "Bash(cat)",
+      "Read(//tmp/**)"
+    ]
+  }
+}

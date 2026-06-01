@@ -3,6 +3,85 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { logger } from './logger';
 
+// Validation function for test patterns to prevent shell injection
+function validateTestPattern(pattern: string): void {
+  // Only allow alphanumeric, dots, slashes, hyphens, underscores, asterisks, question marks, and brackets
+  const allowedPatternRegex = /^[a-zA-Z0-9_\-./{}*?[\]]+$/;
+  if (!allowedPatternRegex.test(pattern)) {
+    throw new Error(
+      `Invalid test pattern: contains dangerous characters. ` +
+      `Only alphanumeric, dots, slashes, hyphens, underscores, wildcards, and brackets are allowed.`
+    );
+  }
+}
+
+// TypeScript interfaces for framework report formats
+interface CucumberStep {
+  result?: {
+    status: string;
+    duration?: number;
+    error_message?: string;
+  };
+}
+
+interface CucumberScenario {
+  name?: string;
+  steps?: CucumberStep[];
+}
+
+interface CucumberFeature {
+  elements?: CucumberScenario[];
+}
+
+interface JestAssertionResult {
+  status: string;
+  fullName?: string;
+  title?: string;
+  duration?: number;
+  failureMessages?: string[];
+}
+
+interface JestTestFile {
+  assertionResults?: JestAssertionResult[];
+}
+
+interface JestReport {
+  testResults?: JestTestFile[];
+}
+
+interface CypressTest {
+  title?: string;
+  pass?: boolean;
+  pending?: boolean;
+  duration?: number;
+  err?: {
+    message?: string;
+  };
+}
+
+interface CypressSuite {
+  tests?: CypressTest[];
+  suites?: CypressSuite[];
+}
+
+interface CypressReport {
+  suites?: CypressSuite[];
+}
+
+interface SeleniumTest {
+  title?: string;
+  pass?: boolean;
+  pending?: boolean;
+  duration?: number;
+  err?: {
+    message?: string;
+  };
+}
+
+interface SeleniumReport {
+  tests?: SeleniumTest[];
+}
+
 export interface ExecutionOptions {
   projectPath: string;
   framework: 'cucumber' | 'jest' | 'cypress' | 'selenium';
@@ -76,6 +155,16 @@ async function executeCucumber(
   timeout?: number
 ): Promise<ExecutionResult> {
   return new Promise((resolve, reject) => {
+    // Validate test pattern to prevent shell injection
+    if (testPattern) {
+      try {
+        validateTestPattern(testPattern);
+      } catch (error) {
+        reject(error);
+        return;
+      }
+    }
+
     const reportPath = path.join(projectPath, 'cucumber-report.json');
     const args = [
       'cucumber-js',
@@ -108,6 +197,11 @@ async function executeCucumber(
 
     child.on('close', async (code) => {
       try {
+        // Validate exit code - non-zero means failure
+        if (code !== 0 && code !== null) {
+          throw new Error(`Cucumber execution failed with exit code ${code}`);
+        }
+
         // Parse the generated JSON report
         const result = await parseCucumberReport(reportPath);
         result.rawOutput = stdout + stderr;
@@ -127,6 +221,16 @@ async function executeJest(
   timeout?: number
 ): Promise<ExecutionResult> {
   return new Promise((resolve, reject) => {
+    // Validate test pattern to prevent shell injection
+    if (testPattern) {
+      try {
+        validateTestPattern(testPattern);
+      } catch (error) {
+        reject(error);
+        return;
+      }
+    }
+
     const reportPath = path.join(projectPath, 'jest-report.json');
     const args = [
       'jest',
@@ -159,6 +263,11 @@ async function executeJest(
 
     child.on('close', async (code) => {
       try {
+        // Validate exit code - non-zero means failure
+        if (code !== 0 && code !== null) {
+          throw new Error(`Jest execution failed with exit code ${code}`);
+        }
+
         const result = await parseJestReport(reportPath);
         result.rawOutput = stdout + stderr;
         resolve(result);
@@ -177,6 +286,16 @@ async function executeCypress(
   timeout?: number
 ): Promise<ExecutionResult> {
   return new Promise((resolve, reject) => {
+    // Validate test pattern to prevent shell injection
+    if (testPattern) {
+      try {
+        validateTestPattern(testPattern);
+      } catch (error) {
+        reject(error);
+        return;
+      }
+    }
+
     const reportPath = path.join(projectPath, 'cypress-report.json');
     const args = [
       'cypress',
@@ -212,6 +331,11 @@ async function executeCypress(
 
     child.on('close', async (code) => {
       try {
+        // Validate exit code - non-zero means failure
+        if (code !== 0 && code !== null) {
+          throw new Error(`Cypress execution failed with exit code ${code}`);
+        }
+
         const result = await parseCypressReport(reportPath);
         result.rawOutput = stdout + stderr;
         resolve(result);
@@ -230,6 +354,16 @@ async function executeSelenium(
   timeout?: number
 ): Promise<ExecutionResult> {
   return new Promise((resolve, reject) => {
+    // Validate test pattern to prevent shell injection
+    if (testPattern) {
+      try {
+        validateTestPattern(testPattern);
+      } catch (error) {
+        reject(error);
+        return;
+      }
+    }
+
     const reportPath = path.join(projectPath, 'selenium-report.json');
     const args = [
       'mocha',
@@ -263,6 +397,11 @@ async function executeSelenium(
 
     child.on('close', async (code) => {
       try {
+        // Validate exit code - non-zero means failure
+        if (code !== 0 && code !== null) {
+          throw new Error(`Selenium execution failed with exit code ${code}`);
+        }
+
         const result = await parseSeleniumReport(reportPath);
         result.rawOutput = stdout + stderr;
         resolve(result);
@@ -277,7 +416,18 @@ async function executeSelenium(
 async function parseCucumberReport(reportPath: string): Promise<ExecutionResult> {
   try {
     const content = await fs.readFile(reportPath, 'utf-8');
-    const features = JSON.parse(content);
+    let features: CucumberFeature[];
+
+    try {
+      features = JSON.parse(content);
+    } catch (parseError) {
+      throw new Error(`Failed to parse Cucumber report JSON: ${(parseError as Error).message}`);
+    }
+
+    // Validate that features is an array
+    if (!Array.isArray(features)) {
+      throw new Error('Invalid Cucumber report format: expected array of features');
+    }
 
     let passed = 0;
     let failed = 0;
@@ -286,14 +436,22 @@ async function parseCucumberReport(reportPath: string): Promise<ExecutionResult>
     const tests: TestResult[] = [];
 
     for (const feature of features) {
-      if (feature.elements) {
-        for (const scenario of feature.elements) {
+      // Validate feature structure
+      if (!feature || typeof feature !== 'object') continue;
+
+      const elements = feature.elements;
+      if (Array.isArray(elements)) {
+        for (const scenario of elements) {
+          // Validate scenario structure
+          if (!scenario || typeof scenario !== 'object') continue;
+
           let scenarioStatus: 'PASSED' | 'FAILED' | 'SKIPPED' = 'PASSED';
           let scenarioDuration = 0;
 
-          if (scenario.steps) {
-            for (const step of scenario.steps) {
-              if (step.result) {
+          const steps = scenario.steps;
+          if (Array.isArray(steps)) {
+            for (const step of steps) {
+              if (step && step.result && typeof step.result === 'object') {
                 scenarioDuration += step.result.duration || 0;
 
                 if (step.result.status === 'failed') {
@@ -311,11 +469,15 @@ async function parseCucumberReport(reportPath: string): Promise<ExecutionResult>
 
           totalDuration += scenarioDuration;
 
+          const errorStep = Array.isArray(steps)
+            ? steps.find((s: CucumberStep) => s && s.result && s.result.error_message)
+            : undefined;
+
           tests.push({
             name: scenario.name || 'Unnamed Scenario',
             status: scenarioStatus,
             duration: scenarioDuration,
-            errorMessage: scenario.steps?.find((s: any) => s.result?.error_message)?.result?.error_message,
+            errorMessage: errorStep?.result?.error_message,
           });
         }
       }
@@ -337,7 +499,18 @@ async function parseCucumberReport(reportPath: string): Promise<ExecutionResult>
 async function parseJestReport(reportPath: string): Promise<ExecutionResult> {
   try {
     const content = await fs.readFile(reportPath, 'utf-8');
-    const data = JSON.parse(content);
+    let data: JestReport;
+
+    try {
+      data = JSON.parse(content);
+    } catch (parseError) {
+      throw new Error(`Failed to parse Jest report JSON: ${(parseError as Error).message}`);
+    }
+
+    // Validate that data is an object
+    if (!data || typeof data !== 'object') {
+      throw new Error('Invalid Jest report format: expected object');
+    }
 
     let passed = 0;
     let failed = 0;
@@ -345,11 +518,22 @@ async function parseJestReport(reportPath: string): Promise<ExecutionResult> {
     let totalDuration = 0;
     const tests: TestResult[] = [];
 
-    if (data.testResults) {
-      for (const testFile of data.testResults) {
-        if (testFile.assertionResults) {
-          for (const assertion of testFile.assertionResults) {
-            const status = assertion.status === 'passed' ? 'PASSED' : assertion.status === 'pending' ? 'SKIPPED' : 'FAILED';
+    const testResults = data.testResults;
+    if (Array.isArray(testResults)) {
+      for (const testFile of testResults) {
+        if (!testFile || typeof testFile !== 'object') continue;
+
+        const assertionResults = testFile.assertionResults;
+        if (Array.isArray(assertionResults)) {
+          for (const assertion of assertionResults) {
+            if (!assertion || typeof assertion !== 'object') continue;
+
+            const status =
+              assertion.status === 'passed'
+                ? 'PASSED'
+                : assertion.status === 'pending'
+                  ? 'SKIPPED'
+                  : 'FAILED';
 
             if (status === 'PASSED') passed++;
             else if (status === 'FAILED') failed++;
@@ -362,7 +546,9 @@ async function parseJestReport(reportPath: string): Promise<ExecutionResult> {
               name: assertion.fullName || assertion.title || 'Unnamed Test',
               status,
               duration,
-              errorMessage: assertion.failureMessages?.[0],
+              errorMessage: Array.isArray(assertion.failureMessages)
+                ? assertion.failureMessages[0]
+                : undefined,
             });
           }
         }
@@ -385,7 +571,18 @@ async function parseJestReport(reportPath: string): Promise<ExecutionResult> {
 async function parseCypressReport(reportPath: string): Promise<ExecutionResult> {
   try {
     const content = await fs.readFile(reportPath, 'utf-8');
-    const data = JSON.parse(content);
+    let data: CypressReport;
+
+    try {
+      data = JSON.parse(content);
+    } catch (parseError) {
+      throw new Error(`Failed to parse Cypress report JSON: ${(parseError as Error).message}`);
+    }
+
+    // Validate that data is an object
+    if (!data || typeof data !== 'object') {
+      throw new Error('Invalid Cypress report format: expected object');
+    }
 
     let passed = 0;
     let failed = 0;
@@ -393,9 +590,14 @@ async function parseCypressReport(reportPath: string): Promise<ExecutionResult> 
     let totalDuration = 0;
     const tests: TestResult[] = [];
 
-    const extractTests = (suite: any): void => {
-      if (suite.tests) {
-        for (const test of suite.tests) {
+    const extractTests = (suite: CypressSuite): void => {
+      if (!suite || typeof suite !== 'object') return;
+
+      const suiteTests = suite.tests;
+      if (Array.isArray(suiteTests)) {
+        for (const test of suiteTests) {
+          if (!test || typeof test !== 'object') continue;
+
           const status = test.pass ? 'PASSED' : test.pending ? 'SKIPPED' : 'FAILED';
 
           if (status === 'PASSED') passed++;
@@ -414,15 +616,17 @@ async function parseCypressReport(reportPath: string): Promise<ExecutionResult> 
         }
       }
 
-      if (suite.suites) {
-        for (const subsuite of suite.suites) {
+      const suites = suite.suites;
+      if (Array.isArray(suites)) {
+        for (const subsuite of suites) {
           extractTests(subsuite);
         }
       }
     };
 
-    if (data.suites) {
-      for (const suite of data.suites) {
+    const suites = data.suites;
+    if (Array.isArray(suites)) {
+      for (const suite of suites) {
         extractTests(suite);
       }
     }
@@ -443,7 +647,18 @@ async function parseCypressReport(reportPath: string): Promise<ExecutionResult> 
 async function parseSeleniumReport(reportPath: string): Promise<ExecutionResult> {
   try {
     const content = await fs.readFile(reportPath, 'utf-8');
-    const data = JSON.parse(content);
+    let data: SeleniumReport;
+
+    try {
+      data = JSON.parse(content);
+    } catch (parseError) {
+      throw new Error(`Failed to parse Selenium report JSON: ${(parseError as Error).message}`);
+    }
+
+    // Validate that data is an object
+    if (!data || typeof data !== 'object') {
+      throw new Error('Invalid Selenium report format: expected object');
+    }
 
     let passed = 0;
     let failed = 0;
@@ -451,8 +666,11 @@ async function parseSeleniumReport(reportPath: string): Promise<ExecutionResult>
     let totalDuration = 0;
     const tests: TestResult[] = [];
 
-    if (data.tests) {
-      for (const test of data.tests) {
+    const seleniumTests = data.tests;
+    if (Array.isArray(seleniumTests)) {
+      for (const test of seleniumTests) {
+        if (!test || typeof test !== 'object') continue;
+
         const status = test.pass ? 'PASSED' : test.pending ? 'SKIPPED' : 'FAILED';
 
         if (status === 'PASSED') passed++;

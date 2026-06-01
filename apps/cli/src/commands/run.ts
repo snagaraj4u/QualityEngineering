@@ -47,7 +47,10 @@ export const runCommand = new Command()
 
       process.exit(result.failed > 0 ? 1 : 0);
     } catch (error) {
-      console.error(chalk.red('Error executing tests:'), error);
+      console.error(
+        chalk.red('Error executing tests:'),
+        error instanceof Error ? (error.stack || error.message) : String(error)
+      );
       process.exit(1);
     }
   });

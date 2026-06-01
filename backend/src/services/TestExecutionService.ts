@@ -15,6 +15,14 @@ export class TestExecutionService {
   async executeTests(request: ExecutionRequest): Promise<ExecutionResult> {
     const { projectPath, framework, testPattern, clientId, projectId } = request;
 
+    // Runtime validation of framework parameter
+    const validFrameworks = ['cucumber', 'jest', 'cypress', 'selenium'];
+    if (!validFrameworks.includes(framework)) {
+      throw new Error(
+        `Invalid framework: ${framework}. Supported frameworks: ${validFrameworks.join(', ')}`
+      );
+    }
+
     const options: ExecutionOptions = {
       projectPath,
       framework,
@@ -79,8 +87,10 @@ export class TestExecutionService {
       });
       logger.info(`Execution results saved for client ${clientId}, project ${projectId}`);
     } catch (error) {
-      // Don't throw on save failure - execution itself succeeded
-      logger.warn(`Failed to save execution results: ${(error as Error).message}`);
+      // Propagate the error so callers can detect save failure
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to save execution results: ${errorMessage}`);
+      throw new Error(`Failed to save execution results: ${errorMessage}`);
     }
   }
 }
