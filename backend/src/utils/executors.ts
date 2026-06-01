@@ -483,3 +483,5 @@ async function parseSeleniumReport(reportPath: string): Promise<ExecutionResult>
     throw error;
   }
 }
+
+export { parseCucumberReport, parseJestReport, parseCypressReport, parseSeleniumReport };

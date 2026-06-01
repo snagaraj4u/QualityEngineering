@@ -66,11 +66,15 @@ export class TestExecutionService {
       await prisma.executionResult.create({
         data: {
           clientId,
-          testCaseId: projectId, // Using projectId as testCaseId for now (schema may vary)
-          userId: clientId, // Using clientId as userId for now
+          projectId,
+          framework,
+          passed: result.passed,
+          failed: result.failed,
+          skipped: result.skipped,
           status: result.failed > 0 ? 'FAILED' : 'PASSED',
           duration: result.duration,
           errorMessage: result.rawOutput,
+          testResults: JSON.stringify(result.tests),
         },
       });
       logger.info(`Execution results saved for client ${clientId}, project ${projectId}`);

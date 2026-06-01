@@ -1,61 +1,53 @@
 import { Command } from 'commander';
 import { TestExecutionService } from '../../../backend/src/services/TestExecutionService';
-import { logger } from '../../../backend/src/utils/logger';
+import chalk from 'chalk';
 
-export const createRunCommand = (): Command => {
-  const cmd = new Command('run');
+const service = new TestExecutionService();
 
-  cmd
-    .description('Execute tests via CLI and capture results')
-    .requiredOption('--framework <type>', 'Test framework (cucumber, jest, cypress, selenium)')
-    .requiredOption('--project <path>', 'Project path to run tests in')
-    .option('--test-pattern <pattern>', 'Test file pattern to match')
-    .option('--client-id <id>', 'Client ID for result storage')
-    .option('--json', 'Output results as JSON')
-    .action(async (options) => {
-      try {
-        const service = new TestExecutionService();
+export const runCommand = new Command()
+  .name('run')
+  .description('Execute tests in a project')
+  .requiredOption('-f, --framework <framework>', 'Test framework (cucumber|jest|cypress|selenium)')
+  .requiredOption('-p, --project <path>', 'Path to test project')
+  .option('-t, --test-pattern <pattern>', 'Pattern to match test files')
+  .option('-c, --client-id <id>', 'Client ID for results tracking')
+  .option('--json', 'Output results as JSON')
+  .action(async (options) => {
+    try {
+      console.log(chalk.blue('Starting test execution...'));
 
-        const result = await service.executeTests({
-          projectPath: options.project,
-          framework: options.framework,
-          testPattern: options.testPattern,
-          clientId: options.clientId,
-        });
+      const result = await service.executeTests({
+        projectPath: options.project,
+        framework: options.framework,
+        testPattern: options.testPattern,
+        clientId: options.clientId,
+      });
 
-        if (options.json) {
-          console.log(JSON.stringify(result, null, 2));
-        } else {
-          // Colored console output
-          console.log('\n========== Test Execution Results ==========');
-          console.log(`Passed:  \x1b[32m${result.passed}\x1b[0m`);
-          console.log(`Failed:  \x1b[31m${result.failed}\x1b[0m`);
-          console.log(`Skipped: \x1b[33m${result.skipped}\x1b[0m`);
-          console.log(`Duration: ${result.duration}ms`);
+      if (options.json) {
+        console.log(JSON.stringify(result, null, 2));
+      } else {
+        console.log('\n' + chalk.bold('Test Results'));
+        console.log(chalk.green(`Passed: ${result.passed}`));
+        console.log(chalk.red(`Failed: ${result.failed}`));
+        console.log(chalk.yellow(`Skipped: ${result.skipped}`));
+        console.log(chalk.cyan(`Duration: ${result.duration}ms`));
 
-          if (result.failed > 0) {
-            console.log('\n========== Failed Tests ==========');
-            for (const test of result.tests) {
-              if (test.status === 'FAILED') {
-                console.log(`\x1b[31m✗\x1b[0m ${test.name}`);
-                if (test.errorMessage) {
-                  console.log(`  Error: ${test.errorMessage}`);
-                }
+        if (result.failed > 0) {
+          console.log('\n' + chalk.red.bold('Failed Tests:'));
+          result.tests
+            .filter((t) => t.status === 'FAILED')
+            .forEach((t) => {
+              console.log(chalk.red(`  ${t.name}`));
+              if (t.errorMessage) {
+                console.log(chalk.gray(`    ${t.errorMessage}`));
               }
-            }
-          }
-
-          console.log('==========================================\n');
+            });
         }
-
-        // Exit with proper code
-        process.exit(result.failed > 0 ? 1 : 0);
-      } catch (error) {
-        logger.error(`Test execution command failed: ${(error as Error).message}`);
-        console.error(`\x1b[31mError: ${(error as Error).message}\x1b[0m`);
-        process.exit(1);
       }
-    });
 
-  return cmd;
-};
+      process.exit(result.failed > 0 ? 1 : 0);
+    } catch (error) {
+      console.error(chalk.red('Error executing tests:'), error);
+      process.exit(1);
+    }
+  });

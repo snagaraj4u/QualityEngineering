@@ -101,20 +101,30 @@ enum TestCaseStatus {
 // ExecutionResult model
 model ExecutionResult {
   id           String   @id @default(cuid())
-  testCaseId   String
-  userId       String
+  clientId     String?
+  testCaseId   String?
+  userId       String?
+  projectId    String?
+  framework    String?
   status       ExecutionStatus
+  passed       Int      @default(0)
+  failed       Int      @default(0)
+  skipped      Int      @default(0)
   duration     Int?     // in milliseconds
   errorMessage String?
+  testResults  String?  @db.Text // JSON stringified
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  testCase TestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client   Client?   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  testCase TestCase? @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  user     User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
   defects  Defect[]
 
   @@index([testCaseId])
   @@index([userId])
+  @@index([clientId])
+  @@index([projectId])
   @@map("execution_results")
 }
 
