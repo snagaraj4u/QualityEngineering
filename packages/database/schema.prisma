@@ -22,6 +22,7 @@ model Client {
   projects      Project[]
   videoAnalyses VideoAnalysis[]
   executionResults ExecutionResult[]
+  generationLogs   GenerationLog[]
 
   @@map("clients")
 }
@@ -191,6 +192,26 @@ model SkillLog {
 
   @@index([userId])
   @@map("skill_logs")
+}
+
+// Telemetry for AI test-case generation routed through the SkillRouter.
+// Distinct from SkillLog (which tracks user skill proficiency).
+model GenerationLog {
+  id            String   @id @default(cuid())
+  clientId      String
+  framework     String
+  designPattern String
+  inputTokens   Int      @default(0)
+  outputTokens  Int      @default(0)
+  promptUsed    String
+  success       Boolean  @default(true)
+  error         String?
+  createdAt     DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@map("generation_logs")
 }
 
 // VideoAnalysis model for video processing and test extraction

@@ -188,14 +188,6 @@ export class ExecutionResultService {
         );
       }
 
-      // Convert PASSED/FAILED/SKIPPED status to match test results format
-      const normalizeStatus = (status: 'PASSED' | 'FAILED' | 'SKIPPED' | 'CANCELLED'): string => {
-        if (status === 'PASSED') return 'PASSED';
-        if (status === 'FAILED') return 'FAILED';
-        if (status === 'CANCELLED') return 'CANCELLED';
-        return 'SKIPPED';
-      };
-
       // Normalize test results
       const normalizedTests = results.tests.map(test => ({
         name: test.name,
@@ -204,10 +196,18 @@ export class ExecutionResultService {
         errorMessage: test.errorMessage,
       }));
 
+      // Map to Prisma ExecutionStatus enum
+      const statusMap: Record<string, 'PASSED' | 'FAILED' | 'SKIPPED' | 'CANCELLED'> = {
+        'PASSED': 'PASSED',
+        'FAILED': 'FAILED',
+        'SKIPPED': 'SKIPPED',
+        'CANCELLED': 'CANCELLED',
+      };
+
       await prisma.executionResult.update({
         where: { id: executionId },
         data: {
-          status: normalizeStatus(status),
+          status: statusMap[status],
           passed: results.passed,
           failed: results.failed,
           skipped: results.skipped,

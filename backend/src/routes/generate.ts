@@ -1,8 +1,8 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { SkillRouterService } from '../services/SkillRouterService';
 import { TestCaseService } from '../services/TestCaseService';
-import { ApiError } from '../middleware/errorHandler';
-import logger from '../utils/logger.js';
+import { ApiError } from '../utils/ApiError';
+import logger from '../utils/logger';
 
 const router = Router();
 const skillRouterService = new SkillRouterService();
@@ -17,7 +17,7 @@ interface AuthRequest extends Request {
 router.post('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     if (!req.clientId || !req.userId) {
-      throw new ApiError(401, 'Unauthorized');
+      throw new ApiError('Unauthorized', 'UNAUTHORIZED', 401);
     }
 
     const {
@@ -30,7 +30,7 @@ router.post('/', async (req: AuthRequest, res: Response, next: NextFunction) => 
     } = req.body;
 
     if (!projectId || !framework || !designPattern || !requirements) {
-      throw new ApiError(400, 'Missing required fields');
+      throw new ApiError('Missing required fields', 'INVALID_REQUEST', 400);
     }
 
     logger.info('Generating test cases', {
@@ -52,14 +52,11 @@ router.post('/', async (req: AuthRequest, res: Response, next: NextFunction) => 
     if (saveAs) {
       testCase = await testCaseService.createTestCase({
         projectId,
-        createdById: req.userId,
         title: saveAs,
         description: requirements,
-        framework,
-        designPattern,
-        content: generation.content,
-        sourceType: 'manual',
-        acceptanceCriteria,
+        steps: [],
+        expectedResult: generation.content || '',
+        status: 'active',
       });
     }
 

@@ -1,5 +1,5 @@
 // backend/src/utils/claude.ts
-import { Anthropic } from 'anthropic';
+import Anthropic from '@anthropic-ai/sdk';
 import logger from './logger';
 
 if (!process.env.CLAUDE_API_KEY) {

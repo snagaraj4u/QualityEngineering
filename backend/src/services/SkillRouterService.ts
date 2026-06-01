@@ -52,7 +52,7 @@ export class SkillRouterService {
       const result = await generateTestCases(fullPrompt, data.requirements);
 
       // Log the skill usage
-      await prisma.skillLog.create({
+      await prisma.generationLog.create({
         data: {
           clientId: data.clientId,
           framework: data.framework,
@@ -75,7 +75,7 @@ export class SkillRouterService {
 
       // Log the failure
       if (data.clientId) {
-        await prisma.skillLog.create({
+        await prisma.generationLog.create({
           data: {
             clientId: data.clientId,
             framework: data.framework,
