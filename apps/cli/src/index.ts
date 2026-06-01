@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import chalk from 'chalk';
+import { runCommand } from './commands/run';
 
 const program = new Command();
 
@@ -8,11 +8,6 @@ program
   .description('Quality Engineering CLI')
   .version('1.0.0');
 
-program
-  .command('test')
-  .description('Run tests')
-  .action(() => {
-    console.log(chalk.green('Testing...'));
-  });
+program.addCommand(runCommand);
 
 program.parse(process.argv);
