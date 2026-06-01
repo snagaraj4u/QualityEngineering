@@ -19,7 +19,24 @@
       "Bash(bash /tmp/key_validation.sh)",
       "Bash(bash /tmp/verify_phase6_2.sh)",
       "Bash(bash /tmp/check_new_issues.sh)",
-      "Bash(bash /tmp/integration_check.sh)"
+      "Bash(bash /tmp/integration_check.sh)",
+      "Bash(npm ls *)",
+      "Bash(npm --version)",
+      "Bash(yarn *)",
+      "Bash(corepack enable *)",
+      "Bash(corepack prepare *)",
+      "Bash(find *)",
+      "Bash(npm info *)",
+      "Bash(npm view *)",
+      "Bash(npx prisma *)",
+      "Bash(git *)",
+      "Bash(node *)",
+      "Bash(gh --version)",
+      "Bash(gh auth *)",
+      "Bash(printenv DATABASE_URL)",
+      "PowerShell(Test-Path *)",
+      "PowerShell(Get-Process *)",
+      "PowerShell(Stop-Process *)"
     ]
   }
 }
