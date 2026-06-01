@@ -9,6 +9,7 @@ import testCasesRouter from './routes/test-cases';
 import videoRouter from './routes/video';
 import testRouter from './routes/test';
 import streamRouter from './routes/stream';
+import defectsRouter from './routes/defects';
 
 dotenv.config();
 
@@ -23,6 +24,7 @@ app.use('/api/test-cases', testCasesRouter);
 app.use('/api/video', videoRouter);
 app.use('/api/test', testRouter);
 app.use('/api/test', streamRouter);
+app.use('/api/defects', defectsRouter);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
