@@ -1,5 +1,29 @@
 import { VideoAnalysisService } from '../../backend/src/services/VideoAnalysisService';
 
+// analyzeVideo delegates frame extraction to the Claude Vision util, which
+// requires a live Anthropic SDK/API key. Mock that boundary so the tests
+// exercise the service's frames->steps transformation deterministically.
+// validateVideo tests below still use the real fs + ./test-fixtures files.
+jest.mock('../../backend/src/utils/vision', () => ({
+  __esModule: true,
+  analyzeVideoWithVision: jest.fn().mockResolvedValue({
+    frames: [
+      {
+        timestamp: 0,
+        action: 'Click the login button',
+        element: 'button#login',
+        expectedResult: 'Login form is displayed',
+      },
+      {
+        timestamp: 1200,
+        action: 'Enter credentials and submit',
+        element: 'form#auth',
+        expectedResult: 'User is authenticated',
+      },
+    ],
+  }),
+}));
+
 describe('VideoAnalysisService', () => {
   let service: VideoAnalysisService;
 
