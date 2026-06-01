@@ -92,28 +92,6 @@ testRouter.post('/execute', async (req: Request, res: Response) => {
         clientId,
         projectId,
       })
-      .then(async (result) => {
-        // Update execution result with final status
-        // Issue 2 Fix: Remove 'as any' cast - let TypeScript infer the type
-        const status: 'PASSED' | 'FAILED' = result.failed > 0 ? 'FAILED' : 'PASSED';
-        await executionResultService.updateExecutionStatus(
-          executionStart.executionId,
-          status,
-          clientId,
-          {
-            passed: result.passed,
-            failed: result.failed,
-            skipped: result.skipped,
-            duration: result.duration,
-            tests: result.tests.map(t => ({
-              name: t.name,
-              status: t.status,
-              duration: t.duration,
-              errorMessage: t.errorMessage,
-            })),
-          }
-        );
-      })
       .catch(async (error) => {
         logger.error(
           `Test execution failed for ${executionStart.executionId}: ${error instanceof Error ? error.message : String(error)}`

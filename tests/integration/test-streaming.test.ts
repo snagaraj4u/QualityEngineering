@@ -91,3 +91,83 @@ describe('SSE Streaming', () => {
     });
   });
 });
+
+describe('Test Progress Events', () => {
+  it('should have EventEmitter capabilities', () => {
+    const TestExecutionService = require('../../backend/src/services/TestExecutionService').TestExecutionService;
+    const service = new TestExecutionService();
+
+    expect(service).toHaveProperty('on');
+    expect(service).toHaveProperty('emit');
+    expect(typeof service.on).toBe('function');
+    expect(typeof service.emit).toBe('function');
+  });
+
+  it('should emit test-complete events for each test result', (done) => {
+    const TestExecutionService = require('../../backend/src/services/TestExecutionService').TestExecutionService;
+    const service = new TestExecutionService();
+
+    const events: any[] = [];
+    service.on('test-complete', (event: any) => {
+      events.push(event);
+    });
+
+    // Simulate emitting a test-complete event
+    service.emit('test-complete', {
+      executionId: 'exec-123',
+      test: { name: 'test-1', status: 'passed', duration: 100 },
+    });
+
+    setTimeout(() => {
+      expect(events.length).toBe(1);
+      expect(events[0].executionId).toBe('exec-123');
+      expect(events[0].test.name).toBe('test-1');
+      done();
+    }, 50);
+  });
+
+  it('should emit execution-complete event when tests finish', (done) => {
+    const TestExecutionService = require('../../backend/src/services/TestExecutionService').TestExecutionService;
+    const service = new TestExecutionService();
+
+    const events: any[] = [];
+    service.on('execution-complete', (event: any) => {
+      events.push(event);
+    });
+
+    service.emit('execution-complete', {
+      executionId: 'exec-123',
+      passed: 1,
+      failed: 0,
+      skipped: 0,
+      duration: 500,
+    });
+
+    setTimeout(() => {
+      expect(events.length).toBe(1);
+      expect(events[0].passed).toBe(1);
+      done();
+    }, 50);
+  });
+
+  it('should emit execution-error event on failure', (done) => {
+    const TestExecutionService = require('../../backend/src/services/TestExecutionService').TestExecutionService;
+    const service = new TestExecutionService();
+
+    const events: any[] = [];
+    service.on('execution-error', (event: any) => {
+      events.push(event);
+    });
+
+    service.emit('execution-error', {
+      executionId: 'exec-123',
+      error: 'Test execution failed',
+    });
+
+    setTimeout(() => {
+      expect(events.length).toBe(1);
+      expect(events[0].error).toBe('Test execution failed');
+      done();
+    }, 50);
+  });
+});

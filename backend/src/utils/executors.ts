@@ -709,4 +709,4 @@ async function parseSeleniumReport(reportPath: string): Promise<ExecutionResult>
   }
 }
 
-export { parseCucumberReport, parseJestReport, parseCypressReport, parseSeleniumReport };
+export { parseCucumberReport, parseJestReport, parseCypressReport, parseSeleniumReport, executeCucumber, executeJest, executeCypress, executeSelenium };
