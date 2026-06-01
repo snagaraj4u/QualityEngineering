@@ -8,19 +8,11 @@ const router = Router();
 const skillRouterService = new SkillRouterService();
 const testCaseService = new TestCaseService();
 
-interface AuthRequest extends Request {
-  clientId?: string;
-  userId?: string;
-}
-
 // POST /api/test-cases/generate
-router.post('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!req.clientId || !req.userId) {
-      throw new ApiError('Unauthorized', 'UNAUTHORIZED', 401);
-    }
-
     const {
+      clientId,
       projectId,
       framework,
       designPattern,
@@ -28,6 +20,13 @@ router.post('/', async (req: AuthRequest, res: Response, next: NextFunction) => 
       acceptanceCriteria,
       saveAs,
     } = req.body;
+
+    // clientId is supplied in the request body, matching the convention used
+    // by the other QE routes (test, video, defects) since there is no auth
+    // middleware populating req.clientId.
+    if (!clientId || typeof clientId !== 'string') {
+      throw new ApiError('Missing or invalid required field: clientId', 'UNAUTHORIZED', 401);
+    }
 
     if (!projectId || !framework || !designPattern || !requirements) {
       throw new ApiError('Missing required fields', 'INVALID_REQUEST', 400);
@@ -40,7 +39,7 @@ router.post('/', async (req: AuthRequest, res: Response, next: NextFunction) => 
 
     // Generate via Skill Router
     const generation = await skillRouterService.generateTestCase({
-      clientId: req.clientId,
+      clientId,
       framework,
       designPattern,
       requirements,

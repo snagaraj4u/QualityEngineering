@@ -6,6 +6,7 @@ import logger from './utils/logger';
 import jiraRouter from './routes/jira';
 import qmetryRouter from './routes/qmetry';
 import testCasesRouter from './routes/test-cases';
+import generateRouter from './routes/generate';
 import videoRouter from './routes/video';
 import testRouter from './routes/test';
 import streamRouter from './routes/stream';
@@ -21,6 +22,9 @@ app.use(cors());
 app.use(express.json());
 app.use('/api/jira', jiraRouter);
 app.use('/api/qmetry', qmetryRouter);
+// Mount before /api/test-cases so the generate sub-paths aren't captured by
+// the test-cases router's `/:id` route.
+app.use('/api/test-cases/generate', generateRouter);
 app.use('/api/test-cases', testCasesRouter);
 app.use('/api/video', videoRouter);
 app.use('/api/test', testRouter);
