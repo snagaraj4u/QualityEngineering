@@ -1,14 +1,14 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { errorHandler } from './middleware/errorHandler.js';
-import logger from './utils/logger.js';
-import jiraRouter from './routes/jira.js';
-import qmetryRouter from './routes/qmetry.js';
-import testCasesRouter from './routes/test-cases.js';
-import generateRouter from './routes/generate.js';
-import videoRouter from './routes/video.js';
-import testRouter from './routes/test.js';
+import { errorHandler } from './middleware/errorHandler';
+import logger from './utils/logger';
+import jiraRouter from './routes/jira';
+import qmetryRouter from './routes/qmetry';
+import testCasesRouter from './routes/test-cases';
+import videoRouter from './routes/video';
+import testRouter from './routes/test';
+import streamRouter from './routes/stream';
 
 dotenv.config();
 
@@ -20,9 +20,9 @@ app.use(express.json());
 app.use('/api/jira', jiraRouter);
 app.use('/api/qmetry', qmetryRouter);
 app.use('/api/test-cases', testCasesRouter);
-app.use('/api/test-cases/generate', generateRouter);
 app.use('/api/video', videoRouter);
 app.use('/api/test', testRouter);
+app.use('/api/test', streamRouter);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -34,6 +34,11 @@ app.use((req, res) => {
 
 app.use(errorHandler);
 
-app.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT}`);
-});
+// Only listen if not in test environment
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    logger.info(`Server running on port ${PORT}`);
+  });
+}
+
+export { app };
