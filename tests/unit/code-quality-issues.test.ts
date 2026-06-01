@@ -14,7 +14,11 @@ import {
 // Mock logger to capture logs
 const mockLogs: string[] = [];
 jest.mock('../../backend/src/utils/logger', () => ({
-  logger: {
+  // logger is a default export; without __esModule the interop helper
+  // double-wraps this object and logger.error becomes undefined (and mockLogs
+  // never fills). The `mock` prefix lets the hoisted factory reference it.
+  __esModule: true,
+  default: {
     info: jest.fn((msg: string) => mockLogs.push(`INFO: ${msg}`)),
     error: jest.fn((msg: string) => mockLogs.push(`ERROR: ${msg}`)),
     warn: jest.fn((msg: string) => mockLogs.push(`WARN: ${msg}`)),
@@ -210,25 +214,32 @@ describe('Code Quality Issues - Phase 6 Task 6.1', () => {
     it('should log error stack trace, not just error object', async () => {
       const service = new TestExecutionService();
 
+      // executeTests is fire-and-forget; the synchronous error path that logs
+      // is a startup failure (the catch logs the error before rethrowing).
+      // Force one deterministically via a rejected persistence call.
+      const { prisma } = require('../../backend/src/utils/db');
+      (prisma.executionResult.create as jest.Mock).mockRejectedValueOnce(
+        new Error('Database connection failed')
+      );
+
       try {
         await service.executeTests({
           projectPath: '/nonexistent/path/that/does/not/exist',
+          projectId: 'proj-1',
+          clientId: 'client-1',
           framework: 'jest',
         });
       } catch (error) {
-        // Expected to throw
+        // Expected to rethrow after logging
       }
 
-      // Check that error stack was logged (not just the error object)
+      // Check that the failure was logged (not silently swallowed)
       const errorLogs = mockLogs.filter(log => log.startsWith('ERROR:'));
-
-      // Should have logged an error
       expect(errorLogs.length).toBeGreaterThan(0);
 
-      // Error message should include meaningful information
-      // (either message, stack, or both)
+      // Error log should carry meaningful information
       const combinedLogs = errorLogs.join(' ');
-      expect(combinedLogs).toMatch(/not found|path|Project|Error/i);
+      expect(combinedLogs).toMatch(/start test execution|Error/i);
     });
   });
 
@@ -397,12 +408,12 @@ describe('Code Quality Issues - Phase 6 Task 6.1', () => {
       const projectPath = path.join(tempDir, 'project');
       await fs.mkdir(projectPath);
 
-      // @ts-expect-error - Testing runtime validation of invalid framework
       const invalidRequest = {
         projectPath,
         framework: 'invalid-framework',
       };
 
+      // @ts-expect-error - invalid framework string is not a valid ExecutionRequest; testing runtime validation
       await expect(service.executeTests(invalidRequest)).rejects.toThrow(/unsupported|invalid|framework/i);
     });
 
