@@ -6,9 +6,12 @@ import logger from '../utils/logger';
 // Mock dependencies
 jest.mock('fs/promises');
 jest.mock('../utils/logger', () => ({
+  __esModule: true,
   default: {
     error: jest.fn(),
     info: jest.fn(),
+    warn: jest.fn(),
+    debug: jest.fn(),
   },
 }));
 
@@ -173,7 +176,8 @@ describe('TestExecutionService - Code Quality Issues', () => {
       expect(logger.error).toHaveBeenCalled();
 
       // Check that error message doesn't duplicate the context
-      const errorCall = logger.error.mock.calls[logger.error.mock.calls.length - 1];
+      const mockedError = logger.error as jest.Mock;
+      const errorCall = mockedError.mock.calls[mockedError.mock.calls.length - 1];
       const errorMsg = errorCall[0] as string;
 
       // Should not have "Failed to save execution results: Failed to save execution results:"
