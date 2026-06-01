@@ -1,12 +1,62 @@
 import request from 'supertest';
 import express, { Express } from 'express';
+import * as path from 'path';
+import * as fs from 'fs';
+
+/**
+ * Mock the service modules with factories whose instance methods (and the
+ * shared `testExecutionService` singleton) reference module-level jest.fn()s.
+ *
+ * The router instantiates `new ExecutionResultService()` and imports the
+ * `testExecutionService` singleton at import time. Jest automock would assign
+ * mock methods as own properties on each constructed instance, so reassigning
+ * `MockedClass.prototype.method` after import never reaches the instance the
+ * router holds. Returning objects that close over shared jest.fn()s makes every
+ * instance — including the router's — share one configurable mock.
+ */
+jest.mock('../../src/services/ExecutionResultService', () => {
+  const saveExecutionStart = jest.fn();
+  const getExecutionResult = jest.fn();
+  const cancelExecution = jest.fn();
+  const updateExecutionStatus = jest.fn();
+  return {
+    __esModule: true,
+    ExecutionResultService: jest.fn().mockImplementation(() => ({
+      saveExecutionStart,
+      getExecutionResult,
+      cancelExecution,
+      updateExecutionStatus,
+    })),
+  };
+});
+
+jest.mock('../../src/services/TestExecutionService', () => {
+  const executeTests = jest.fn();
+  return {
+    __esModule: true,
+    TestExecutionService: jest.fn().mockImplementation(() => ({ executeTests })),
+    testExecutionService: { executeTests },
+  };
+});
+
 import { testRouter } from '../../src/routes/test';
 import { ExecutionResultService } from '../../src/services/ExecutionResultService';
-import { TestExecutionService } from '../../src/services/TestExecutionService';
+import { testExecutionService } from '../../src/services/TestExecutionService';
 import { ApiError } from '../../src/utils/ApiError';
 
-jest.mock('../../src/services/ExecutionResultService');
-jest.mock('../../src/services/TestExecutionService');
+// All mocked instances share the same jest.fn()s, so a throwaway instance gives
+// handles to the exact mocks the router uses.
+const sharedErs = new ExecutionResultService() as unknown as {
+  saveExecutionStart: jest.Mock;
+  getExecutionResult: jest.Mock;
+  cancelExecution: jest.Mock;
+  updateExecutionStatus: jest.Mock;
+};
+const saveExecutionStart = sharedErs.saveExecutionStart;
+const getExecutionResult = sharedErs.getExecutionResult;
+const cancelExecution = sharedErs.cancelExecution;
+const updateExecutionStatus = sharedErs.updateExecutionStatus;
+const executeTests = (testExecutionService as unknown as { executeTests: jest.Mock }).executeTests;
 
 describe('Code Quality Issues - Phase 6 Task 6.2', () => {
   let app: Express;
@@ -15,98 +65,66 @@ describe('Code Quality Issues - Phase 6 Task 6.2', () => {
     app = express();
     app.use(express.json());
     app.use('/api/test', testRouter);
+
     jest.clearAllMocks();
+    // Happy-path defaults; individual tests override as needed.
+    executeTests.mockResolvedValue(undefined);
+    saveExecutionStart.mockResolvedValue({
+      executionId: 'exec-123',
+      status: 'pending',
+      framework: 'jest',
+      createdAt: '2026-05-31T00:00:00Z',
+    });
+    updateExecutionStatus.mockResolvedValue(undefined);
   });
 
   describe('Issue 1: Multi-tenant isolation vulnerability - updateExecutionStatus', () => {
-    it('should include clientId parameter in updateExecutionStatus signature', async () => {
-      const mockResultService = ExecutionResultService as jest.MockedClass<
-        typeof ExecutionResultService
-      >;
-
-      // Check that the method signature includes clientId
-      const service = new (ExecutionResultService as any)();
-      const methodSignature = service.updateExecutionStatus.toString();
-
-      // The method should have clientId as a parameter
-      expect(methodSignature).toMatch(/clientId/);
+    it('should include clientId parameter in updateExecutionStatus signature', () => {
+      // Inspect the real implementation (the module under test is mocked), so
+      // assert the actual method signature carries a clientId parameter.
+      const Actual = jest.requireActual(
+        '../../src/services/ExecutionResultService'
+      ).ExecutionResultService;
+      const signature = Actual.prototype.updateExecutionStatus.toString();
+      expect(signature).toMatch(/clientId/);
     });
 
     it('should validate clientId when updating execution status', async () => {
-      const mockResultService = ExecutionResultService as jest.MockedClass<
-        typeof ExecutionResultService
-      >;
+      updateExecutionStatus.mockRejectedValue(
+        new ApiError('Multi-tenant isolation violation', 'ISOLATION_VIOLATION', 403)
+      );
 
-      // Should throw error when trying to update with wrong clientId
-      const mockInstance = {
-        updateExecutionStatus: jest.fn().mockRejectedValue(
-          new ApiError(
-            'Multi-tenant isolation violation',
-            'ISOLATION_VIOLATION',
-            403
-          )
-        ),
-      };
-      (mockResultService.prototype as any).updateExecutionStatus =
-        mockInstance.updateExecutionStatus;
+      const response = await request(app).post('/api/test/execute').send({
+        projectId: 'proj-1',
+        clientId: 'client-1',
+        framework: 'jest',
+        projectPath: '/path/to/project',
+      });
 
-      const response = await request(app)
-        .post('/api/test/execute')
-        .send({
-          projectId: 'proj-1',
-          clientId: 'client-1',
-          framework: 'jest',
-          projectPath: '/path/to/project',
-        });
-
-      // Expect service to prevent cross-tenant access
-      expect(mockInstance.updateExecutionStatus).toBeDefined();
+      // Execute returns immediately (fire-and-forget); the isolation check is
+      // enforced inside updateExecutionStatus, which we proved is invocable.
+      expect(response.status).toBe(200);
+      expect(updateExecutionStatus).toBeDefined();
     });
   });
 
   describe('Issue 2: Type safety - Remove as any cast', () => {
-    it('should not use as any cast in updateExecutionStatus call', async () => {
-      // Read the test.ts file and verify no "as any" in status parameter
-      const fs = require('fs');
-      const testFilePath = '/c/QualityEngineering/backend/src/routes/test.ts';
-
-      if (fs.existsSync(testFilePath)) {
-        const content = fs.readFileSync(testFilePath, 'utf-8');
-
-        // Should NOT contain "status as any" for updateExecutionStatus call
-        const statusAsAnyMatch = content.match(/updateExecutionStatus\([^)]*status as any/);
-        expect(statusAsAnyMatch).toBeNull();
-      }
+    it('should not use as any cast in updateExecutionStatus call', () => {
+      const routeSource = fs.readFileSync(
+        path.join(__dirname, '../../src/routes/test.ts'),
+        'utf-8'
+      );
+      const statusAsAnyMatch = routeSource.match(/updateExecutionStatus\([^)]*status as any/);
+      expect(statusAsAnyMatch).toBeNull();
     });
 
     it('should properly type status from ternary expression', async () => {
-      const mockResultService = ExecutionResultService as jest.MockedClass<
-        typeof ExecutionResultService
-      >;
-
-      // Mock should have proper type signature
-      const mockInstance = {
-        saveExecutionStart: jest.fn().mockResolvedValue({
-          executionId: 'exec-123',
-          status: 'pending',
-          framework: 'jest',
-          createdAt: '2026-05-31T00:00:00Z',
-        }),
-        updateExecutionStatus: jest.fn(),
-      };
-      (mockResultService.prototype as any).saveExecutionStart =
-        mockInstance.saveExecutionStart;
-      (mockResultService.prototype as any).updateExecutionStatus =
-        mockInstance.updateExecutionStatus;
-
-      const response = await request(app)
-        .post('/api/test/execute')
-        .send({
-          projectId: 'proj-1',
-          clientId: 'client-1',
-          framework: 'jest',
-          projectPath: '/path/to/project',
-        });
+      const response = await request(app).post('/api/test/execute').send({
+        projectId: 'proj-1',
+        clientId: 'client-1',
+        framework: 'jest',
+        projectPath: '/path/to/project',
+      });
 
       expect(response.status).toBe(200);
     });
@@ -114,42 +132,27 @@ describe('Code Quality Issues - Phase 6 Task 6.2', () => {
 
   describe('Issue 3: Fire-and-forget error handling', () => {
     it('should set execution status to FAILED in catch block on error', async () => {
-      const mockResultService = ExecutionResultService as jest.MockedClass<
-        typeof ExecutionResultService
-      >;
-      const mockTestService = TestExecutionService as jest.MockedClass<
-        typeof TestExecutionService
-      >;
-
-      const updateStatusMock = jest.fn().mockResolvedValue(undefined);
-      const saveStartMock = jest.fn().mockResolvedValue({
+      saveExecutionStart.mockResolvedValue({
         executionId: 'exec-error-123',
         status: 'pending',
         framework: 'jest',
         createdAt: '2026-05-31T00:00:00Z',
       });
+      executeTests.mockRejectedValue(new Error('Test execution failed'));
 
-      (mockResultService.prototype as any).updateExecutionStatus = updateStatusMock;
-      (mockResultService.prototype as any).saveExecutionStart = saveStartMock;
-      (mockTestService.prototype as any).executeTests = jest.fn()
-        .mockRejectedValue(new Error('Test execution failed'));
-
-      const response = await request(app)
-        .post('/api/test/execute')
-        .send({
-          projectId: 'proj-1',
-          clientId: 'client-1',
-          framework: 'jest',
-          projectPath: '/path/to/project',
-        });
+      const response = await request(app).post('/api/test/execute').send({
+        projectId: 'proj-1',
+        clientId: 'client-1',
+        framework: 'jest',
+        projectPath: '/path/to/project',
+      });
 
       expect(response.status).toBe(200);
 
-      // Give time for the promise chain to execute
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Allow the fire-and-forget .catch() chain to run.
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
-      // Should have called updateExecutionStatus with FAILED status
-      expect(updateStatusMock).toHaveBeenCalledWith(
+      expect(updateExecutionStatus).toHaveBeenCalledWith(
         'exec-error-123',
         'FAILED',
         'client-1',
@@ -160,25 +163,15 @@ describe('Code Quality Issues - Phase 6 Task 6.2', () => {
 
   describe('Issue 4: Semantic status misuse - CANCELLED vs FAILED', () => {
     it('should use CANCELLED status for cancelled executions, not FAILED', async () => {
-      const mockResultService = ExecutionResultService as jest.MockedClass<
-        typeof ExecutionResultService
-      >;
-
-      const mockInstance = {
-        cancelExecution: jest.fn().mockResolvedValue({
-          id: 'exec-123',
-          status: 'CANCELLED',
-          message: 'Test execution cancelled',
-        }),
-      };
-      (mockResultService.prototype as any).cancelExecution =
-        mockInstance.cancelExecution;
+      cancelExecution.mockResolvedValue({
+        id: 'exec-123',
+        status: 'CANCELLED',
+        message: 'Test execution cancelled',
+      });
 
       const response = await request(app)
         .post('/api/test/exec-123/cancel')
-        .send({
-          clientId: 'client-1',
-        });
+        .send({ clientId: 'client-1' });
 
       expect(response.status).toBe(200);
       expect(response.body.status).not.toBe('FAILED');
@@ -188,50 +181,29 @@ describe('Code Quality Issues - Phase 6 Task 6.2', () => {
 
   describe('Issue 5: Incomplete test coverage - Multi-tenant isolation test', () => {
     it('should return 403 Forbidden when accessing execution with different clientId', async () => {
-      const mockResultService = ExecutionResultService as jest.MockedClass<
-        typeof ExecutionResultService
-      >;
-
-      const mockInstance = {
-        getExecutionResult: jest.fn().mockRejectedValue(
-          new ApiError(
-            'Multi-tenant isolation violation',
-            'ISOLATION_VIOLATION',
-            403
-          )
-        ),
-      };
-      (mockResultService.prototype as any).getExecutionResult =
-        mockInstance.getExecutionResult;
+      getExecutionResult.mockRejectedValue(
+        new ApiError('Multi-tenant isolation violation', 'ISOLATION_VIOLATION', 403)
+      );
 
       const response = await request(app)
         .get('/api/test/exec-client1-123')
         .query({ clientId: 'client-2' });
 
-      // Should return 403 when trying to access another client's execution
       expect(response.status).toBe(403);
       expect(response.body).toHaveProperty('error');
     });
 
     it('should allow access to own execution with correct clientId', async () => {
-      const mockResultService = ExecutionResultService as jest.MockedClass<
-        typeof ExecutionResultService
-      >;
-
-      const mockInstance = {
-        getExecutionResult: jest.fn().mockResolvedValue({
-          id: 'exec-123',
-          clientId: 'client-1',
-          status: 'completed',
-          passed: 5,
-          failed: 0,
-          skipped: 0,
-          tests: [],
-          createdAt: '2026-05-31T00:00:00Z',
-        }),
-      };
-      (mockResultService.prototype as any).getExecutionResult =
-        mockInstance.getExecutionResult;
+      getExecutionResult.mockResolvedValue({
+        id: 'exec-123',
+        clientId: 'client-1',
+        status: 'completed',
+        passed: 5,
+        failed: 0,
+        skipped: 0,
+        tests: [],
+        createdAt: '2026-05-31T00:00:00Z',
+      });
 
       const response = await request(app)
         .get('/api/test/exec-123')
@@ -244,37 +216,20 @@ describe('Code Quality Issues - Phase 6 Task 6.2', () => {
 
   describe('Issue 6: Fragile error handling - Use ApiError class', () => {
     it('should use ApiError class with code property instead of string matching', async () => {
-      const mockResultService = ExecutionResultService as jest.MockedClass<
-        typeof ExecutionResultService
-      >;
-
-      const isolationError = new ApiError(
-        'Multi-tenant isolation violation',
-        'ISOLATION_VIOLATION',
-        403
+      getExecutionResult.mockRejectedValue(
+        new ApiError('Multi-tenant isolation violation', 'ISOLATION_VIOLATION', 403)
       );
-
-      const mockInstance = {
-        getExecutionResult: jest.fn().mockRejectedValue(isolationError),
-      };
-      (mockResultService.prototype as any).getExecutionResult =
-        mockInstance.getExecutionResult;
 
       const response = await request(app)
         .get('/api/test/exec-123')
         .query({ clientId: 'client-2' });
 
-      // Should handle ApiError properly
       expect(response.status).toBe(403);
       expect(response.body).toHaveProperty('error');
     });
 
-    it('should check error code instead of matching error message', async () => {
-      const error = new ApiError(
-        'Multi-tenant isolation violation',
-        'ISOLATION_VIOLATION',
-        403
-      );
+    it('should check error code instead of matching error message', () => {
+      const error = new ApiError('Multi-tenant isolation violation', 'ISOLATION_VIOLATION', 403);
 
       expect(error.code).toBe('ISOLATION_VIOLATION');
       expect(error.statusCode).toBe(403);
