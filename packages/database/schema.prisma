@@ -147,6 +147,8 @@ model Defect {
   executionResultId String?
   severity         DefectSeverity
   status           DefectStatus @default(OPEN)
+  qmetryId         String?   // External QMetry defect id, set when synced to QMetry
+  qmetrySyncedAt   DateTime? // Last time status was synced from QMetry
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -157,6 +159,7 @@ model Defect {
   @@index([testCaseId])
   @@index([projectId])
   @@index([executionResultId])
+  @@index([qmetryId])
   @@map("defects")
 }
 
