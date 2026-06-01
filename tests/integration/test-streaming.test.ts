@@ -65,6 +65,47 @@ describe('SSE Streaming', () => {
       expect(response.status).toBe(403);
     });
 
+    it('should return 400 when clientId is missing', async () => {
+      const response = await request(app).get('/api/test/exec-1/stream');
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('clientId is required');
+      // Validation must happen before any database lookup.
+      expect(prisma.executionResult.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('should replay final results for an already-completed execution', async () => {
+      const testResults = [
+        { name: 'test-1', status: 'PASSED', duration: 100 },
+        { name: 'test-2', status: 'FAILED', duration: 150, errorMessage: 'Expected true' },
+      ];
+
+      (prisma.executionResult.findUnique as jest.Mock).mockResolvedValue({
+        id: 'exec-done',
+        clientId: 'client-1',
+        projectId: 'project-1',
+        framework: 'jest',
+        passed: 1,
+        failed: 1,
+        skipped: 0,
+        duration: 250,
+        testResults: JSON.stringify(testResults),
+        status: 'FAILED',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const response = await request(app)
+        .get('/api/test/exec-done/stream')
+        .query({ clientId: 'client-1' });
+
+      expect(response.status).toBe(200);
+      expect(response.type).toBe('text/event-stream');
+      expect(response.text).toContain('execution-complete');
+      expect(response.text).toContain('250');
+      expect(response.text).toContain('test-1');
+    });
+
     it('should return 200 with text/event-stream for valid execution', async () => {
       const mockExecution = {
         id: 'exec-1',
