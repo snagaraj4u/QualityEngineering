@@ -7,6 +7,7 @@ import jiraRouter from './routes/jira.js';
 import qmetryRouter from './routes/qmetry.js';
 import testCasesRouter from './routes/test-cases.js';
 import generateRouter from './routes/generate.js';
+import videoRouter from './routes/video.js';
 
 dotenv.config();
 
@@ -19,6 +20,7 @@ app.use('/api/jira', jiraRouter);
 app.use('/api/qmetry', qmetryRouter);
 app.use('/api/test-cases', testCasesRouter);
 app.use('/api/test-cases/generate', generateRouter);
+app.use('/api/video', videoRouter);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

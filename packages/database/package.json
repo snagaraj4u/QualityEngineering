@@ -7,14 +7,17 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
-    "migrate": "node dist/migrations/index.js"
+    "migrate:dev": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
+    "generate": "prisma generate",
+    "seed": "node --loader ts-node/esm prisma/seed.ts"
   },
   "dependencies": {
-    "pg": "^8.10.0",
-    "drizzle-orm": "^0.28.0"
+    "@prisma/client": "^5.8.0"
   },
   "devDependencies": {
+    "prisma": "^5.8.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.0.0"
   }
 }

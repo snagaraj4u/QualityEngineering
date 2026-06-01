@@ -7,5 +7,15 @@
     "apps/*",
     "packages/*",
     "backend"
-  ]
+  ],
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "jest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }
