@@ -1,14 +1,22 @@
-import { Anthropic } from 'anthropic';
 import * as fs from 'fs';
 import logger from './logger';
 
-if (!process.env.CLAUDE_API_KEY) {
-  throw new Error('CLAUDE_API_KEY environment variable is not set');
-}
+let client: any = null;
 
-const client = new Anthropic({
-  apiKey: process.env.CLAUDE_API_KEY,
-});
+try {
+  // Try to import the Anthropic SDK if available. The package exports the
+  // client as its default export and (in recent versions) a named export;
+  // fall back across shapes so this works regardless of build.
+  const sdk = require('@anthropic-ai/sdk');
+  const Anthropic = sdk.Anthropic || sdk.default || sdk;
+  if (process.env.CLAUDE_API_KEY) {
+    client = new Anthropic({
+      apiKey: process.env.CLAUDE_API_KEY,
+    });
+  }
+} catch (error) {
+  logger.warn('Anthropic SDK not available, vision analysis disabled');
+}
 
 export interface VideoFrame {
   timestamp: number;
@@ -32,6 +40,10 @@ export async function analyzeVideoWithVision(
   mimeType: 'video/mp4' | 'video/quicktime' | 'video/webm'
 ): Promise<VideoAnalysisResult> {
   try {
+    if (!client) {
+      throw new Error('Anthropic SDK not initialized');
+    }
+
     const model = process.env.CLAUDE_MODEL || 'claude-3-5-sonnet-20241022';
 
     const message = await client.messages.create({
