@@ -19,6 +19,7 @@ jest.mock('../../backend/src/utils/db', () => ({
 
 import { app } from '../../backend/src/index';
 import { prisma } from '../../backend/src/utils/db';
+import { testExecutionService } from '../../backend/src/services/TestExecutionService';
 
 describe('SSE Streaming', () => {
   describe('GET /api/test/:executionId/stream', () => {
@@ -169,5 +170,135 @@ describe('Test Progress Events', () => {
       expect(events[0].error).toBe('Test execution failed');
       done();
     }, 50);
+  });
+});
+
+describe('SSE Event Streaming', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const inProgressExecution = {
+    id: 'exec-stream',
+    clientId: 'client-1',
+    projectId: 'project-1',
+    framework: 'jest',
+    passed: 0,
+    failed: 0,
+    skipped: 0,
+    duration: 0,
+    testResults: '[]',
+    status: 'IN_PROGRESS',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  it('should forward test-complete events to the connected client', async () => {
+    (prisma.executionResult.findUnique as jest.Mock).mockResolvedValue(inProgressExecution);
+
+    const pending = request(app)
+      .get('/api/test/exec-stream/stream')
+      .query({ clientId: 'client-1' });
+
+    // Emit once the handler has had a chance to subscribe, then close the stream
+    // via execution-complete so supertest resolves with the buffered body.
+    setTimeout(() => {
+      testExecutionService.emit('test-complete', {
+        executionId: 'exec-stream',
+        test: { name: 'example-test', status: 'PASSED', duration: 100 },
+      });
+      testExecutionService.emit('execution-complete', {
+        executionId: 'exec-stream',
+        passed: 1,
+        failed: 0,
+        skipped: 0,
+        duration: 100,
+      });
+    }, 100);
+
+    const response = await pending;
+
+    expect(response.status).toBe(200);
+    expect(response.text).toContain('test-complete');
+    expect(response.text).toContain('example-test');
+    expect(response.text).toContain('execution-complete');
+  });
+
+  it('should close the stream when execution-complete is emitted', async () => {
+    (prisma.executionResult.findUnique as jest.Mock).mockResolvedValue(inProgressExecution);
+
+    const pending = request(app)
+      .get('/api/test/exec-stream/stream')
+      .query({ clientId: 'client-1' });
+
+    setTimeout(() => {
+      testExecutionService.emit('execution-complete', {
+        executionId: 'exec-stream',
+        passed: 2,
+        failed: 0,
+        skipped: 0,
+        duration: 250,
+      });
+    }, 100);
+
+    const response = await pending;
+
+    expect(response.text).toContain('execution-complete');
+    expect(response.text).toContain('250');
+  });
+
+  it('should ignore events for a different executionId', async () => {
+    (prisma.executionResult.findUnique as jest.Mock).mockResolvedValue(inProgressExecution);
+
+    const pending = request(app)
+      .get('/api/test/exec-stream/stream')
+      .query({ clientId: 'client-1' });
+
+    setTimeout(() => {
+      // Event for an unrelated execution must not leak into this stream.
+      testExecutionService.emit('test-complete', {
+        executionId: 'some-other-exec',
+        test: { name: 'leaked-test', status: 'PASSED', duration: 10 },
+      });
+      testExecutionService.emit('execution-complete', {
+        executionId: 'exec-stream',
+        passed: 0,
+        failed: 0,
+        skipped: 0,
+        duration: 0,
+      });
+    }, 100);
+
+    const response = await pending;
+
+    expect(response.text).not.toContain('leaked-test');
+    expect(response.text).toContain('execution-complete');
+  });
+
+  it('should remove its listeners after the stream closes', async () => {
+    (prisma.executionResult.findUnique as jest.Mock).mockResolvedValue(inProgressExecution);
+
+    const before = testExecutionService.listenerCount('test-complete');
+
+    const pending = request(app)
+      .get('/api/test/exec-stream/stream')
+      .query({ clientId: 'client-1' });
+
+    setTimeout(() => {
+      testExecutionService.emit('execution-complete', {
+        executionId: 'exec-stream',
+        passed: 0,
+        failed: 0,
+        skipped: 0,
+        duration: 0,
+      });
+    }, 100);
+
+    await pending;
+
+    // Allow the 'close' cleanup handler to run.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(testExecutionService.listenerCount('test-complete')).toBe(before);
   });
 });

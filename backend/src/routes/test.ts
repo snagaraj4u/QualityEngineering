@@ -1,12 +1,11 @@
 import express, { Router, Request, Response } from 'express';
-import { TestExecutionService } from '../services/TestExecutionService';
+import { testExecutionService } from '../services/TestExecutionService';
 import { ExecutionResultService } from '../services/ExecutionResultService';
 import logger from '../utils/logger';
 import { ApiError } from '../utils/ApiError';
 
 export const testRouter = Router();
 
-const testExecutionService = new TestExecutionService();
 const executionResultService = new ExecutionResultService();
 
 // Validation utilities

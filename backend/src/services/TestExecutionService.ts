@@ -186,3 +186,16 @@ export class TestExecutionService extends EventEmitter {
     }
   }
 }
+
+/**
+ * Shared singleton instance.
+ *
+ * The SSE stream endpoint and the test-execution route must use the SAME
+ * EventEmitter instance, otherwise events emitted by the runner would never
+ * reach the stream's listeners (Node EventEmitter delivers events only to
+ * listeners registered on the same object). Each open SSE connection adds a
+ * few listeners, so raise the max-listener ceiling to avoid spurious leak
+ * warnings under normal concurrency.
+ */
+export const testExecutionService = new TestExecutionService();
+testExecutionService.setMaxListeners(0); // 0 = unlimited; SSE fan-out is bounded by active connections
