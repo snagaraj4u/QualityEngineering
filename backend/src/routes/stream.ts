@@ -40,7 +40,14 @@ router.get('/:executionId/stream', async (req: Request, res: Response, next: Nex
 
     // If execution is already completed, send current results and close
     if (execution.status && execution.status !== 'IN_PROGRESS') {
-      const testResults = JSON.parse(execution.testResults || '[]');
+      let testResults;
+      try {
+        testResults = JSON.parse(execution.testResults || '[]');
+      } catch (parseError) {
+        logger.warn('Invalid JSON in testResults for execution ' + executionId, parseError);
+        testResults = [];
+      }
+
       res.write('data: ' + JSON.stringify({
         type: 'complete',
         passed: execution.passed,
