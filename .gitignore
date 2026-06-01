@@ -9,6 +9,10 @@ dist/
 build/
 *.tsbuildinfo
 
+# Next.js
+.next/
+next-env.d.ts
+
 # IDE
 .vscode/
 .idea/
