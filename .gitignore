@@ -33,6 +33,10 @@ yarn-error.log*
 coverage/
 .nyc_output/
 
+# Generated oversized test fixture (created on demand as a sparse file by
+# tests/unit/VideoAnalysisService.test.ts; never commit it)
+test-fixtures/huge-video.mp4
+
 # OS
 Thumbs.db
 *.bak

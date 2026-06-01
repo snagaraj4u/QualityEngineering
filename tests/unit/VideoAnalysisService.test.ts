@@ -1,4 +1,11 @@
 import { VideoAnalysisService } from '../../backend/src/services/VideoAnalysisService';
+import * as fs from 'fs';
+
+// The >500MB fixture is generated on demand as a sparse file (reports its
+// logical size to fs.stat but uses ~0 bytes on disk) so it never has to be
+// committed to git. validateVideo only checks fs.statSync().size.
+const HUGE_FIXTURE = './test-fixtures/huge-video.mp4';
+const HUGE_FIXTURE_SIZE = 600 * 1024 * 1024;
 
 // analyzeVideo delegates frame extraction to the Claude Vision util, which
 // requires a live Anthropic SDK/API key. Mock that boundary so the tests
@@ -26,6 +33,18 @@ jest.mock('../../backend/src/utils/vision', () => ({
 
 describe('VideoAnalysisService', () => {
   let service: VideoAnalysisService;
+
+  beforeAll(() => {
+    // Create the oversized fixture as a sparse file if it isn't present.
+    if (!fs.existsSync(HUGE_FIXTURE) || fs.statSync(HUGE_FIXTURE).size < HUGE_FIXTURE_SIZE) {
+      const fd = fs.openSync(HUGE_FIXTURE, 'w');
+      try {
+        fs.ftruncateSync(fd, HUGE_FIXTURE_SIZE);
+      } finally {
+        fs.closeSync(fd);
+      }
+    }
+  });
 
   beforeEach(() => {
     service = new VideoAnalysisService();
@@ -75,7 +94,7 @@ describe('VideoAnalysisService', () => {
     });
 
     it('should reject files larger than 500MB', async () => {
-      const filePath = './test-fixtures/huge-video.mp4';
+      const filePath = HUGE_FIXTURE;
       const isValid = await service.validateVideo(filePath);
 
       expect(isValid).toBe(false);
