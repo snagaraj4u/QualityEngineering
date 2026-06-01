@@ -7,9 +7,12 @@ import { executeTests, ExecutionResult } from './executors';
 jest.mock('child_process');
 jest.mock('fs/promises');
 jest.mock('./logger', () => ({
+  __esModule: true,
   default: {
     error: jest.fn(),
     info: jest.fn(),
+    warn: jest.fn(),
+    debug: jest.fn(),
   },
 }));
 
@@ -41,6 +44,9 @@ describe('executors.ts - Code Quality Issues', () => {
 
       mockSpawn.mockReturnValue(mockEmitter as any);
       (fs.access as jest.Mock).mockResolvedValue(undefined);
+      // On a clean (code 0) exit the executor parses the framework report;
+      // return an empty cucumber report so parsing resolves deterministically.
+      (fs.readFile as jest.Mock).mockResolvedValue('[]');
 
       // This test verifies that the code should handle code === 0 without checking for null
       // After fix, the condition should be: if (code !== 0)
@@ -56,7 +62,6 @@ describe('executors.ts - Code Quality Issues', () => {
 
     it('should properly handle non-zero exit codes without null check', async () => {
       const mockSpawn = spawn as jest.MockedFunction<typeof spawn>;
-      let closeHandler: any;
 
       const mockEmitter = {
         stdout: {
@@ -67,7 +72,10 @@ describe('executors.ts - Code Quality Issues', () => {
         },
         on: jest.fn(function (event: string, handler: any) {
           if (event === 'close') {
-            closeHandler = handler;
+            // Auto-fire on registration. Firing synchronously from the test
+            // races the dispatcher's `await fs.access` (the handler isn't
+            // registered yet), which previously left the promise pending.
+            setImmediate(() => handler(1));
           }
           return this;
         }),
@@ -76,18 +84,13 @@ describe('executors.ts - Code Quality Issues', () => {
       mockSpawn.mockReturnValue(mockEmitter as any);
       (fs.access as jest.Mock).mockResolvedValue(undefined);
 
-      const executePromise = executeTests({
-        projectPath: '/test/path',
-        framework: 'jest',
-      });
-
-      // Simulate close with non-zero code
-      if (closeHandler) {
-        closeHandler(1);
-      }
-
-      // Should throw error for non-zero exit code
-      await expect(executePromise).rejects.toThrow();
+      // Non-zero exit code must reject (code !== 0), independent of any null check.
+      await expect(
+        executeTests({
+          projectPath: '/test/path',
+          framework: 'jest',
+        })
+      ).rejects.toThrow();
     });
   });
 
@@ -112,59 +115,21 @@ describe('executors.ts - Code Quality Issues', () => {
   });
 });
 
-describe('executors.ts - Line 200-203, 267, 335, 401 null checks', () => {
-  it('Line 201: Cucumber should check only code !== 0, not code !== 0 && code !== null', () => {
-    const source = require('fs').readFileSync(
-      path.join(__dirname, 'executors.ts'),
-      'utf-8'
-    );
-    const lines = source.split('\n');
+describe('executors.ts - exit-code null-check regression guard', () => {
+  // These guards previously hard-coded line numbers (201/267/335/401); the
+  // code-quality fix shifted the file, so they checked unrelated lines. Assert
+  // the intent directly against the whole source instead: Node.js close events
+  // never pass null, so the close handlers must guard with `if (code !== 0)`
+  // and never reintroduce the `code !== 0 && code !== null` anti-pattern.
+  const readSource = () =>
+    require('fs').readFileSync(path.join(__dirname, 'executors.ts'), 'utf-8') as string;
 
-    // Line 201 should be the close handler check
-    const line201 = lines[200];
-
-    // After fix, should NOT contain "&& code !== null"
-    expect(line201).not.toMatch(/code !== 0 && code !== null/);
-    // After fix, should contain "if (code !== 0)"
-    expect(line201).toMatch(/if \(code !== 0\)/);
+  it('does not use the `code !== 0 && code !== null` anti-pattern anywhere', () => {
+    expect(readSource()).not.toMatch(/code !== 0 && code !== null/);
   });
 
-  it('Line 267: Jest should check only code !== 0, not code !== 0 && code !== null', () => {
-    const source = require('fs').readFileSync(
-      path.join(__dirname, 'executors.ts'),
-      'utf-8'
-    );
-    const lines = source.split('\n');
-
-    const line267 = lines[266];
-
-    expect(line267).not.toMatch(/code !== 0 && code !== null/);
-    expect(line267).toMatch(/if \(code !== 0\)/);
-  });
-
-  it('Line 335: Cypress should check only code !== 0, not code !== 0 && code !== null', () => {
-    const source = require('fs').readFileSync(
-      path.join(__dirname, 'executors.ts'),
-      'utf-8'
-    );
-    const lines = source.split('\n');
-
-    const line335 = lines[334];
-
-    expect(line335).not.toMatch(/code !== 0 && code !== null/);
-    expect(line335).toMatch(/if \(code !== 0\)/);
-  });
-
-  it('Line 401: Selenium should check only code !== 0, not code !== 0 && code !== null', () => {
-    const source = require('fs').readFileSync(
-      path.join(__dirname, 'executors.ts'),
-      'utf-8'
-    );
-    const lines = source.split('\n');
-
-    const line401 = lines[400];
-
-    expect(line401).not.toMatch(/code !== 0 && code !== null/);
-    expect(line401).toMatch(/if \(code !== 0\)/);
+  it('guards every framework executor with `if (code !== 0)` (cucumber, jest, cypress, selenium)', () => {
+    const matches = readSource().match(/if \(code !== 0\)/g) ?? [];
+    expect(matches.length).toBeGreaterThanOrEqual(4);
   });
 });
