@@ -2,20 +2,28 @@
 import Anthropic from '@anthropic-ai/sdk';
 import logger from './logger';
 
-if (!process.env.CLAUDE_API_KEY) {
-  throw new Error('CLAUDE_API_KEY environment variable is not set');
-}
+// Lazily construct the client so importing this module has no side effects.
+// The API key is only required when a generation is actually attempted, which
+// keeps suites that merely import the app (without calling Claude) runnable
+// without a key configured.
+let client: Anthropic | null = null;
 
-const client = new Anthropic({
-  apiKey: process.env.CLAUDE_API_KEY,
-});
+function getClient(): Anthropic {
+  if (!process.env.CLAUDE_API_KEY) {
+    throw new Error('CLAUDE_API_KEY environment variable is not set');
+  }
+  if (!client) {
+    client = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
+  }
+  return client;
+}
 
 export async function generateTestCases(
   prompt: string,
   requirements: string
 ): Promise<{ content: string; inputTokens: number; outputTokens: number }> {
   try {
-    const message = await client.messages.create({
+    const message = await getClient().messages.create({
       model: 'claude-3-5-sonnet-20241022',
       max_tokens: 2048,
       messages: [
